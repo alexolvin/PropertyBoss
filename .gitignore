@@ -1,0 +1,15 @@
+# Локальный конфиг (содержит DSN с паролем)
+config/config.yaml
+
+# Бинарники
+/bin/
+
+# Frontend
+web/node_modules/
+web/dist/
+
+# IDE / ОС
+.idea/
+.vscode/
+.DS_Store
+*.log
