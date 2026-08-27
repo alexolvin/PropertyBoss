@@ -1,4 +1,4 @@
-// pb — бинарь PropertyBoss: миграции, загрузка курсов, (этап 2: API-сервер).
+// pb — бинарь PropertyBoss: миграции, курсы, API-сервер, сканер (этап 3).
 package main
 
 import (
@@ -16,6 +16,9 @@ import (
 	"propertyboss/internal/config"
 	"propertyboss/internal/db"
 	"propertyboss/internal/fx"
+
+	// Коннекторы регистрируют себя в init() (этап 3).
+	_ "propertyboss/internal/connectors/bazos"
 )
 
 func main() {
@@ -58,6 +61,10 @@ func main() {
 		if err := runServe(ctx, cfg); err != nil {
 			log.Fatal(err)
 		}
+	case "scan":
+		if err := runScan(ctx, cfg, os.Args[2:]); err != nil {
+			log.Fatal(err)
+		}
 	default:
 		usage()
 	}
@@ -70,6 +77,8 @@ func usage() {
   pb migrate [--config PATH]   применить миграции
   pb fx sync   [--config PATH] загрузить курсы ЕЦБ в fx_rates
   pb serve     [--config PATH] API-сервер (этап 2)
+  pb scan -source ID -search-config ID [--config PATH]  прогон сканера (этап 3)
+  pb scan -list  [--config PATH]  зарегистрированные коннекторы
 
 Конфиг: --config | $PB_CONFIG | config/config.yaml`)
 	os.Exit(2)

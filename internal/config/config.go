@@ -7,6 +7,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -34,6 +35,34 @@ type Config struct {
 		// Типы сделок (источник: ТЗ §7.2 — «продажа / аренда»)
 		DealTypes []string `yaml:"deal_types"`
 	} `yaml:"dashboard"`
+
+	// Дедупликация объявлений (ТЗ §8.1): параметры сопоставления
+	// записей из разных источников в один физический объект.
+	// ТЗ: радиус «из конфига по стране (плотная европейская застройка
+	// и пригород требуют разного)» — значения здесь, не в коде (ТЗ §0.1).
+	Dedupe struct {
+		ByCountry map[string]DedupeParams `yaml:"by_country"`
+	} `yaml:"dedupe"`
+
+	// Scan — параметры прогона сканера (этап 3).
+	Scan struct {
+		// Вежливость: пауза между запросами страниц категории, мс
+		// (коннекторы, идущие по страницам). Источник значения:
+		// оператор, вежливый уровень для публичного сайта (ТЗ §0.1).
+		PageDelayMS int `yaml:"page_delay_ms"`
+	} `yaml:"scan"`
+}
+
+// DedupeParams — пороги сопоставления для одной страны.
+type DedupeParams struct {
+	// Радиус сравнения координат, м. ТЗ §8.1: «радиус 50 м из v1
+	// сохраняется» (значения по странам — в конфиге).
+	RadiusM int `yaml:"radius_m"`
+	// Максимально допустимое различие площади, % (0..100).
+	AreaTolerancePct int `yaml:"area_tolerance_pct"`
+	// Порог сходства нормализованных адресов (0..1]. Совпадение только
+	// по адресу помечается match_confidence='low' (ТЗ §8.1).
+	AddressSimilarity float64 `yaml:"address_similarity"`
 }
 
 // Load читает и валидирует конфиг из файла.
@@ -69,5 +98,31 @@ func Load(path string) (*Config, error) {
 	if c.Dashboard.Listen == "" {
 		return nil, fmt.Errorf("config: dashboard.listen не задан")
 	}
+	for _, country := range c.Dashboard.Countries {
+		p, ok := c.Dedupe.ByCountry[country]
+		if !ok {
+			return nil, fmt.Errorf("config: dedupe.by_country не задан для %s (ТЗ §8.1)", country)
+		}
+		if p.RadiusM <= 0 {
+			return nil, fmt.Errorf("config: dedupe.by_country.%s.radius_m должен быть > 0", country)
+		}
+		if p.AreaTolerancePct <= 0 || p.AreaTolerancePct > 100 {
+			return nil, fmt.Errorf("config: dedupe.by_country.%s.area_tolerance_pct должен быть в 1..100", country)
+		}
+		if p.AddressSimilarity <= 0 || p.AddressSimilarity > 1 {
+			return nil, fmt.Errorf("config: dedupe.by_country.%s.address_similarity должен быть в (0, 1]", country)
+		}
+	}
+	if c.Scan.PageDelayMS < 0 {
+		return nil, fmt.Errorf("config: scan.page_delay_ms должен быть >= 0, задано %d", c.Scan.PageDelayMS)
+	}
+	if c.Scan.PageDelayMS == 0 {
+		c.Scan.PageDelayMS = 1000 // разумный вежливый уровень по умолчанию
+	}
 	return &c, nil
+}
+
+// ScanPageDelay — пауза между запросами страниц (scan.page_delay_ms).
+func (c *Config) ScanPageDelay() time.Duration {
+	return time.Duration(c.Scan.PageDelayMS) * time.Millisecond
 }
