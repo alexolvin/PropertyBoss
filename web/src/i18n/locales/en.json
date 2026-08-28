@@ -2,7 +2,8 @@
   "app": {
     "title": "PropertyBoss",
     "tab_search": "Search settings",
-    "tab_objects": "Properties"
+    "tab_objects": "Properties",
+    "tab_zones": "Zones"
   },
   "settings": {
     "display_currency": "Display currency",
@@ -44,6 +45,7 @@
   "objects": {
     "no_objects": "No objects yet — scanners start at stage 3",
     "address": "Address",
+    "zone": "Zone",
     "price": "Price (market currency)",
     "price_display": "Display",
     "area": "Area, m²",
@@ -63,6 +65,21 @@
     "page": "Page",
     "of": "of",
     "rooms_short": "rm"
+  },
+  "zones": {
+    "all_countries": "All countries",
+    "all_levels": "All levels",
+    "level_region": "region",
+    "level_municipality": "municipality",
+    "level_zone": "zone",
+    "level_col": "Level",
+    "name": "Name",
+    "code": "Code",
+    "parent": "Parent",
+    "source": "Source",
+    "no_zones": "No zones yet — import polygons (pb zones import)",
+    "total": "Zones: {{count}}",
+    "sources_attribution": "Zone data sources: {{sources}}"
   },
   "common": {
     "error": "Error: {{message}}",

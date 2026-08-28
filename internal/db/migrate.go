@@ -39,9 +39,10 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool, dir string) (applied []str
 	sort.Strings(names)
 
 	for _, name := range names {
+		// EXISTS — честный boolean (в этой сборке pgx int4 в *bool не сканируется).
 		var exists bool
 		err := pool.QueryRow(ctx,
-			"SELECT 1 FROM schema_migrations WHERE name = $1", name).Scan(&exists)
+			"SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE name = $1)", name).Scan(&exists)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return applied, fmt.Errorf("db: проверка %s: %w", name, err)
 		}

@@ -2,7 +2,8 @@
   "app": {
     "title": "PropertyBoss",
     "tab_search": "Настройки поиска",
-    "tab_objects": "Объекты"
+    "tab_objects": "Объекты",
+    "tab_zones": "Зоны"
   },
   "settings": {
     "display_currency": "Валюта отображения",
@@ -44,6 +45,7 @@
   "objects": {
     "no_objects": "Объектов пока нет — сканеры начнут работать в этапе 3",
     "address": "Адрес",
+    "zone": "Зона",
     "price": "Цена (валюта рынка)",
     "price_display": "Отображение",
     "area": "Площадь, м²",
@@ -63,6 +65,21 @@
     "page": "Стр.",
     "of": "из",
     "rooms_short": "комн."
+  },
+  "zones": {
+    "all_countries": "Все страны",
+    "all_levels": "Все уровни",
+    "level_region": "регион",
+    "level_municipality": "муниципалитет",
+    "level_zone": "зона",
+    "level_col": "Уровень",
+    "name": "Название",
+    "code": "Код",
+    "parent": "Родитель",
+    "source": "Источник",
+    "no_zones": "Зон пока нет — импортируйте полигоны (pb zones import)",
+    "total": "Зон: {{count}}",
+    "sources_attribution": "Источники данных зон: {{sources}}"
   },
   "common": {
     "error": "Ошибка: {{message}}",

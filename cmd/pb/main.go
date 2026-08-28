@@ -1,4 +1,4 @@
-// pb — бинарь PropertyBoss: миграции, курсы, API-сервер, сканер (этап 3).
+// pb — бинарь PropertyBoss: миграции, курсы, API-сервер, сканер, зоны.
 package main
 
 import (
@@ -65,6 +65,10 @@ func main() {
 		if err := runScan(ctx, cfg, os.Args[2:]); err != nil {
 			log.Fatal(err)
 		}
+	case "zones":
+		if err := runZones(ctx, cfg, os.Args[2:]); err != nil {
+			log.Fatal(err)
+		}
 	default:
 		usage()
 	}
@@ -79,6 +83,11 @@ func usage() {
   pb serve     [--config PATH] API-сервер (этап 2)
   pb scan -source ID -search-config ID [--config PATH]  прогон сканера (этап 3)
   pb scan -list  [--config PATH]  зарегистрированные коннекторы
+  pb zones import -file PATH -country XX -source "NAME" [--config PATH]  полигоны зон (этап 4)
+  pb zones quotazioni -file PATH [-country IT] [--config PATH]  котировки зон (этап 4)
+  pb zones assign [--config PATH]  привязка объектов к зонам (этап 4)
+  pb zones link -country XX -level L [--config PATH]  parent_id по геометрии (этап 4)
+  pb zones list [-country XX] [-level L] [--config PATH]  просмотр зон (этап 4)
 
 Конфиг: --config | $PB_CONFIG | config/config.yaml`)
 	os.Exit(2)

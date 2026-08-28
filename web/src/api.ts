@@ -56,6 +56,9 @@ export interface ObjectItem {
   country: string
   deal_type: string
   zone_id: number | null
+  zone_name: string | null
+  zone_level: string | null
+  zone_source: string | null
   address: string | null
   area_sqm: number | null
   rooms: number | null
@@ -75,6 +78,41 @@ export interface ObjectsPage {
   page: number
   per_page: number
   objects: ObjectItem[]
+}
+
+export interface ZoneItem {
+  id: number
+  country: string
+  level: 'region' | 'municipality' | 'zone'
+  name: string
+  external_code: string | null
+  parent_name: string | null
+  source: string
+}
+
+export interface ZonesPage {
+  total: number
+  page: number
+  per_page: number
+  zones: ZoneItem[]
+  /** Источники данных зон (атрибуция в UI, ТЗ §13). */
+  sources: string[]
+}
+
+export interface ZonesParams {
+  country?: string
+  level?: string
+  page?: number
+  per_page?: number
+}
+
+export function listZones(params: ZonesParams): Promise<ZonesPage> {
+  const qs = new URLSearchParams()
+  if (params.country) qs.set('country', params.country)
+  if (params.level) qs.set('level', params.level)
+  qs.set('page', String(params.page ?? 1))
+  qs.set('per_page', String(params.per_page ?? 50))
+  return get<ZonesPage>(`/api/zones?${qs.toString()}`)
 }
 
 const HEADERS = { 'Content-Type': 'application/json' } as const

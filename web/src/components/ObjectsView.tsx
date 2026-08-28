@@ -79,6 +79,7 @@ export default function ObjectsView({ meta, displayCurrency }: Props) {
               <tr>
                 <th>#</th>
                 <th>{t('objects.address')}</th>
+                <th>{t('objects.zone')}</th>
                 <th>{t('search.country')}</th>
                 <th>{t('search.property_type')}</th>
                 <th>{t('objects.area')}</th>
@@ -95,6 +96,19 @@ export default function ObjectsView({ meta, displayCurrency }: Props) {
                 <tr key={o.id}>
                   <td>{o.id}</td>
                   <td>{o.address ?? '—'}</td>
+                  <td>
+                    {o.zone_name ? (
+                      <span title={o.zone_source ?? ''}>
+                        {t(`zones.level_${o.zone_level ?? ''}`, {
+                          defaultValue: o.zone_level ?? '',
+                        })}
+                        {' · '}
+                        {o.zone_name}
+                      </span>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
                   <td>{o.country}</td>
                   <td>{o.property_type ?? '—'}</td>
                   <td>{o.area_sqm ?? '—'}</td>

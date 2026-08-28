@@ -4,8 +4,9 @@ import { getMeta, type Meta } from './api'
 import { LOCALES, setLocale, type Locale } from './i18n'
 import SearchConfigsView from './components/SearchConfigsView'
 import ObjectsView from './components/ObjectsView'
+import ZonesView from './components/ZonesView'
 
-type Tab = 'search' | 'objects'
+type Tab = 'search' | 'objects' | 'zones'
 
 export default function App() {
   const { t, i18n } = useTranslation()
@@ -52,6 +53,12 @@ export default function App() {
           >
             {t('app.tab_objects')}
           </button>
+          <button
+            className={tab === 'zones' ? 'active' : ''}
+            onClick={() => setTab('zones')}
+          >
+            {t('app.tab_zones')}
+          </button>
         </nav>
         <div className="spacer" />
         <label>
@@ -82,8 +89,10 @@ export default function App() {
       <main>
         {tab === 'search' ? (
           <SearchConfigsView meta={meta} />
-        ) : (
+        ) : tab === 'objects' ? (
           <ObjectsView meta={meta} displayCurrency={displayCurrency} />
+        ) : (
+          <ZonesView meta={meta} />
         )}
       </main>
     </>

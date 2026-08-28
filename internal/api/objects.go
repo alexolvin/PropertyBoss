@@ -27,6 +27,9 @@ type objectOut struct {
 	Country        string        `json:"country"`
 	DealType       string        `json:"deal_type"`
 	ZoneID         *int64        `json:"zone_id"`
+	ZoneName       *string       `json:"zone_name,omitempty"`
+	ZoneLevel      *string       `json:"zone_level,omitempty"`
+	ZoneSource     *string       `json:"zone_source,omitempty"`
 	Address        *string       `json:"address"`
 	AreaSqM        *float64      `json:"area_sqm"`
 	Rooms          *int16        `json:"rooms"`
@@ -41,8 +44,14 @@ type objectOut struct {
 	DelistedAt     *time.Time    `json:"delisted_at"`
 }
 
-const objectsSelect = `id, country, deal_type, zone_id, address, area_sqm, rooms, property_type,
-	current_price_minor, currency, status, delisted_reason, first_seen_at, last_seen_at, delisted_at`
+// objectsSelect/objectsFrom — с LEFT JOIN zones: имя/уровень/источник зоны
+// рядом с объектом (ТЗ §13: источник данных зоны виден в UI, не только в коде).
+// Квалификация objects.* обязательна: в zones те же имена колонок.
+const objectsSelect = `objects.id, objects.country, objects.deal_type, objects.zone_id, objects.address, objects.area_sqm, objects.rooms, objects.property_type,
+	objects.current_price_minor, objects.currency, objects.status, objects.delisted_reason, objects.first_seen_at, objects.last_seen_at, objects.delisted_at,
+	z.name AS zone_name, z.level AS zone_level, z.source AS zone_source`
+
+const objectsFrom = ` FROM objects LEFT JOIN zones z ON z.id = objects.zone_id`
 
 // applyDisplay заполняет PriceDisplay суммой в displayTo по курсу на дату
 // наблюдения (last_seen_at). Отсутствие курса — цена рынка остаётся,
@@ -100,7 +109,7 @@ func (s *Server) handleListObjects(w http.ResponseWriter, r *http.Request) {
 	var conds []string
 	var args []any
 	if c := r.URL.Query().Get("country"); c != "" {
-		conds = append(conds, fmt.Sprintf("country = $%d", len(args)+1))
+		conds = append(conds, fmt.Sprintf("objects.country = $%d", len(args)+1))
 		args = append(args, c)
 	}
 	if st := r.URL.Query().Get("status"); st != "" {
@@ -108,7 +117,7 @@ func (s *Server) handleListObjects(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, httpError(http.StatusBadRequest, "status: active | delisted"))
 			return
 		}
-		conds = append(conds, fmt.Sprintf("status = $%d", len(args)+1))
+		conds = append(conds, fmt.Sprintf("objects.status = $%d", len(args)+1))
 		args = append(args, st)
 	}
 	where := ""
@@ -122,8 +131,8 @@ func (s *Server) handleListObjects(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	q := "SELECT " + objectsSelect + " FROM objects" + where +
-		" ORDER BY id DESC LIMIT $" + strconv.Itoa(len(args)+1) + " OFFSET $" + strconv.Itoa(len(args)+2)
+	q := "SELECT " + objectsSelect + objectsFrom + where +
+		" ORDER BY objects.id DESC LIMIT $" + strconv.Itoa(len(args)+1) + " OFFSET $" + strconv.Itoa(len(args)+2)
 	args = append(args, perPage, (page-1)*perPage)
 
 	rows, err := s.Pool.Query(ctx, q, args...)
@@ -138,7 +147,8 @@ func (s *Server) handleListObjects(w http.ResponseWriter, r *http.Request) {
 		var o objectOut
 		if err := rows.Scan(&o.ID, &o.Country, &o.DealType, &o.ZoneID, &o.Address,
 			&o.AreaSqM, &o.Rooms, &o.PropertyType, &o.PriceMinor, &o.Currency,
-			&o.Status, &o.DelistedReason, &o.FirstSeenAt, &o.LastSeenAt, &o.DelistedAt); err != nil {
+			&o.Status, &o.DelistedReason, &o.FirstSeenAt, &o.LastSeenAt, &o.DelistedAt,
+			&o.ZoneName, &o.ZoneLevel, &o.ZoneSource); err != nil {
 			writeErr(w, err)
 			return
 		}
@@ -164,10 +174,11 @@ func (s *Server) handleGetObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var o objectOut
-	err = s.Pool.QueryRow(ctx, "SELECT "+objectsSelect+" FROM objects WHERE id = $1", id).
+	err = s.Pool.QueryRow(ctx, "SELECT "+objectsSelect+objectsFrom+" WHERE objects.id = $1", id).
 		Scan(&o.ID, &o.Country, &o.DealType, &o.ZoneID, &o.Address, &o.AreaSqM, &o.Rooms,
 			&o.PropertyType, &o.PriceMinor, &o.Currency, &o.Status, &o.DelistedReason,
-			&o.FirstSeenAt, &o.LastSeenAt, &o.DelistedAt)
+			&o.FirstSeenAt, &o.LastSeenAt, &o.DelistedAt,
+			&o.ZoneName, &o.ZoneLevel, &o.ZoneSource)
 	if err != nil {
 		writeErr(w, httpError(http.StatusNotFound, "объект %d не найден", id))
 		return

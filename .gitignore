@@ -4,6 +4,9 @@ config/config.yaml
 # Бинарники
 /bin/
 
+# Данные (геофайлы зон и т.п. — импортируются командой, см. .handoff/)
+/data/
+
 # Frontend
 web/node_modules/
 web/dist/
