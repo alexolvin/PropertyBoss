@@ -73,6 +73,20 @@ type Config struct {
 		// Допущение исполнителя: стандартная логарифмическая сетка.
 		LambdaGrid []float64 `yaml:"lambda_grid"`
 	} `yaml:"valuation"`
+
+	// Delist — маркировка объектов delisted (этап 6, ТЗ §8.2).
+	Delist struct {
+		// Сколько ПОСЛЕДОВАТЕЛЬНЫХ полных сканов без объекта нужно,
+		// чтобы считать его исчезнувшим. ТЗ §8.2: «минимум 2».
+		MinConsecutiveMisses int `yaml:"min_consecutive_misses"`
+		// Защита от катастрофы (ТЗ §8.2): если доля исчезнувших за один
+		// прогон объектов источника (в % от его активных) превышает это
+		// значение, прогон аномален — изменения не применяются,
+		// оператор уведомляется.
+		MaxDelistedSharePct float64 `yaml:"max_delisted_share_pct"`
+		// Таймаут прямого URL-чека объявления, с (ТЗ §8.2, защита 4).
+		URLCheckTimeoutSec int `yaml:"url_check_timeout_sec"`
+	} `yaml:"delist"`
 }
 
 // DedupeParams — пороги сопоставления для одной страны.
@@ -163,6 +177,16 @@ func Load(path string) (*Config, error) {
 		if i > 0 && l < c.Valuation.LambdaGrid[i-1] {
 			return nil, fmt.Errorf("config: valuation.lambda_grid не отсортирован по возрастанию (позиция %d)", i)
 		}
+	}
+	// Delist (ТЗ §8.2).
+	if c.Delist.MinConsecutiveMisses < 2 {
+		return nil, fmt.Errorf("config: delist.min_consecutive_misses должен быть >= 2, задано %d (ТЗ §8.2: минимум 2)", c.Delist.MinConsecutiveMisses)
+	}
+	if c.Delist.MaxDelistedSharePct <= 0 || c.Delist.MaxDelistedSharePct > 100 {
+		return nil, fmt.Errorf("config: delist.max_delisted_share_pct должен быть в (0, 100], задано %v (ТЗ §8.2)", c.Delist.MaxDelistedSharePct)
+	}
+	if c.Delist.URLCheckTimeoutSec < 1 {
+		return nil, fmt.Errorf("config: delist.url_check_timeout_sec должен быть >= 1, задано %d (ТЗ §8.2)", c.Delist.URLCheckTimeoutSec)
 	}
 	return &c, nil
 }

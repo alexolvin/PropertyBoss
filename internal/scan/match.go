@@ -38,18 +38,33 @@ func (r *Runner) matchListing(ctx context.Context, tx pgx.Tx, sourceID string, c
 
 	var (
 		objectID  int64
+		status    string
 		matchMeth = matchSourceExternal
 		isNew     bool
 	)
 	err = tx.QueryRow(ctx, `
-		SELECT o.id
+		SELECT o.id, o.status
 		FROM object_listings ol JOIN objects o ON o.id = ol.object_id
 		WHERE ol.source_id = $1 AND ol.external_id = $2`,
 		sourceID, l.ExternalID,
-	).Scan(&objectID)
+	).Scan(&objectID, &status)
 	switch {
 	case err == nil:
 		// 1. Тот же источник, тот же external_id — готовая ссылка.
+		if status == "delisted" {
+			// Объект вернулся в выдачу под тем же id объявления
+			// (ТЗ §8.2: «исчезновение — не продажа» — и повторное
+			// появление возвращает объект на рынок): статус delisted
+			// откатывается.
+			// Без отката delisted-объект, найденный снова, получал бы
+			// обновления цены/даты, но остался бы delisted навсегда.
+			if _, err := tx.Exec(ctx, `
+				UPDATE objects
+				SET status = 'active', delisted_reason = NULL, delisted_at = NULL
+				WHERE id = $1 AND status = 'delisted'`, objectID); err != nil {
+				return false, err
+			}
+		}
 	case errors.Is(err, pgx.ErrNoRows):
 		// 2/3. Дедупликация по §8.1 (другие источники) или новый объект.
 		objectID, matchMeth, isNew, err = r.findOrCreateByDedupe(ctx, tx, sourceID, cfg, l, kAttrs, uAttrs, now)

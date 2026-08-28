@@ -70,7 +70,7 @@ web/                  React + Vite + TS дашборд, i18n ru/en
 | 3. Реестр атрибутов + коннектор | ✅ завершён ([отчёт](.handoff/stage3-report.md)) |
 | 4. Зоны OMI | ✅ завершён ([отчёт](.handoff/stage4-report.md)) |
 | 5. Гедоническая модель | ✅ завершён ([отчёт](.handoff/stage5-report.md)) |
-| 6. delisted-логика | не начат |
+| 6. delisted-логика + защиты | ✅ завершён ([отчёт](.handoff/stage6-report.md)) |
 | 7. Модель ликвидности | не начат |
 | 8. Telegram-бот | не начат (нужен токен) |
 | 9. Phone-agent | не начат (нужен телефон) |

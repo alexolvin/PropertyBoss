@@ -81,5 +81,22 @@ func runScan(ctx context.Context, cfg *config.Config, args []string) error {
 	if rep.Err != nil {
 		return fmt.Errorf("scan: %v", rep.Err)
 	}
+
+	// Этап 6 (ТЗ §8.2): delist-пасс — только после ПОЛНОГО скана.
+	// Неполные прогоны (partial/failed) не дают информации об
+	// исчезновении отдельных объектов и в прогон не вступают
+	// (защита №1).
+	if rep.Completeness == "complete" {
+		drep, err := scan.RunDelistPass(ctx, pool, cfg, *sourceID)
+		if err != nil {
+			return fmt.Errorf("scan: delist-пасс (source %s): %w", *sourceID, err)
+		}
+		log.Printf("delist: source=%s active=%d candidates=%d delisted=%d url_alive=%d url_failed=%d",
+			drep.SourceID, drep.Active, drep.Candidates, drep.Delisted, drep.URLAlive, drep.URLFailed)
+		if drep.Anomaly {
+			log.Printf("delist: source=%s АНОМАЛИЯ (ТЗ §8.2): доля исчезнувших %.1f%% (порог %v%%) — изменения не применены, записано уведомление оператору",
+				drep.SourceID, drep.SharePct, cfg.Delist.MaxDelistedSharePct)
+		}
+	}
 	return nil
 }
