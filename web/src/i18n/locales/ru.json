@@ -64,7 +64,20 @@
     "all_status": "Все статусы",
     "page": "Стр.",
     "of": "из",
-    "rooms_short": "комн."
+    "rooms_short": "комн.",
+    "valuation": "Оценка (модель)",
+    "valuation_no_interval": "интервал недоступен",
+    "valuation_fallback": "зона: использован уровень родителя",
+    "valuation_tooltip": "Цена относительно модели {{version}} (n={{n}}, R²={{r2}}); в скобках — интервал предсказания 95%",
+    "valuation_reason_no_price": "нет цены",
+    "valuation_reason_no_currency": "нет валюты объекта",
+    "valuation_reason_no_area": "нет площади",
+    "valuation_reason_currency_mismatch": "валюта не рыночная",
+    "valuation_reason_no_observations": "наблюдений для модели нет",
+    "valuation_reason_insufficient_observations": "мало наблюдений для модели",
+    "valuation_reason_attribute_missing_rate": "много пропусков в атрибутах",
+    "valuation_reason_degenerate_prediction": "вырожденное предсказание",
+    "valuation_reason_unknown": "нет оценки"
   },
   "zones": {
     "all_countries": "Все страны",

@@ -51,6 +51,24 @@ export interface PriceDisplay {
   rate_stale: boolean
 }
 
+/**
+ * Последняя оценка объекта (valuations, ТЗ §7.3):
+ * price_deviation хранится ВМЕСТЕ с интервалом, sample_size и r_squared —
+ * дашборд не показывает число без интервала.
+ */
+export interface Valuation {
+  model_version: string | null
+  price_deviation: number | null
+  null_reason: string | null
+  predicted_price_minor: number | null
+  interval_low_minor: number | null
+  interval_high_minor: number | null
+  sample_size: number
+  r_squared: number | null
+  zone_fallback: boolean
+  computed_at: string | null
+}
+
 export interface ObjectItem {
   id: number
   country: string
@@ -66,6 +84,7 @@ export interface ObjectItem {
   price_minor: number | null
   currency: string | null
   price_display: PriceDisplay | null
+  valuation: Valuation | null
   status: 'active' | 'delisted'
   delisted_reason: string | null
   first_seen_at: string

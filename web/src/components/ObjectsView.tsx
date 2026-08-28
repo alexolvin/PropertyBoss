@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { listObjects, type Meta, type ObjectsPage } from '../api'
+import { listObjects, type Meta, type ObjectItem, type ObjectsPage } from '../api'
 import { formatDate, formatMoney } from '../format'
 
 interface Props {
@@ -41,6 +41,47 @@ export default function ObjectsView({ meta, displayCurrency }: Props) {
 
   const expOf = (code: string | null | undefined) =>
     meta.currencies.find((c) => c.code === code)?.exponent ?? 2
+
+  // Оценка (ТЗ §7.3): число без интервала не показывается.
+  // price_deviation = price/predicted − 1: >0 — дороже модели, <0 — дешевле.
+  const renderValuation = (o: ObjectItem) => {
+    const v = o.valuation
+    if (!v) return <span className="muted">—</span>
+    if (v.price_deviation == null) {
+      // Причину переводим по префиксу до «:» (в хвосте — параметры прогона).
+      const prefix = v.null_reason ? v.null_reason.split(':')[0].trim() : ''
+      return (
+        <span className="muted" title={v.null_reason ?? ''}>
+          {t(`objects.valuation_reason_${prefix}`, { defaultValue: v.null_reason ?? '—' })}
+        </span>
+      )
+    }
+    if (v.interval_low_minor == null || v.interval_high_minor == null) {
+      return <span className="muted">{t('objects.valuation_no_interval')}</span>
+    }
+    const title = t('objects.valuation_tooltip', {
+      version: v.model_version ?? '—',
+      n: v.sample_size,
+      r2: v.r_squared != null ? v.r_squared.toFixed(2) : '—',
+    })
+    const sign = v.price_deviation >= 0 ? '+' : ''
+    return (
+      <span title={title}>
+        {sign}
+        {(v.price_deviation * 100).toFixed(1)}%{' '}
+        <span className="muted">
+          [
+          {formatMoney(v.interval_low_minor, o.currency, expOf(o.currency), locale)}–
+          {formatMoney(v.interval_high_minor, o.currency, expOf(o.currency), locale)}]
+        </span>
+        {v.zone_fallback ? (
+          <span className="tag warn" title={t('objects.valuation_fallback')}>
+            z↑
+          </span>
+        ) : null}
+      </span>
+    )
+  }
 
   const pages = data ? Math.max(1, Math.ceil(data.total / data.per_page)) : 1
 
@@ -86,6 +127,7 @@ export default function ObjectsView({ meta, displayCurrency }: Props) {
                 <th>{t('objects.rooms')}</th>
                 <th>{t('objects.price')}</th>
                 {displayCurrency && <th>{t('objects.price_display')}</th>}
+                <th>{t('objects.valuation')}</th>
                 <th>{t('objects.status')}</th>
                 <th>{t('objects.first_seen')}</th>
                 <th>{t('objects.last_seen')}</th>
@@ -153,6 +195,7 @@ export default function ObjectsView({ meta, displayCurrency }: Props) {
                       )}
                     </td>
                   )}
+                  <td>{renderValuation(o)}</td>
                   <td>
                     {o.status === 'active' ? (
                       <span className="tag">{t('objects.status_active')}</span>

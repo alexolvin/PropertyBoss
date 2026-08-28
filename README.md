@@ -38,15 +38,19 @@ go run ./cmd/pb serve
 ## Структура
 
 ```
-cmd/pb/               бинарь: migrate | fx sync | serve (этап 2)
+cmd/pb/               бинарь: migrate | fx sync | serve | scan | zones | valuate
 internal/config/      YAML-конфиг с валидацией
 internal/db/          пул pgx + раннер миграций (schema_migrations)
 internal/money/       деньги: int64 в минорных единицах, конвертация через big.Rat (без float, ТЗ §5)
 internal/fx/          клиент XML-фида ЕЦБ + загрузчик в fx_rates
-internal/api/         REST API дашборда (этап 2): meta, search-configs, objects
-migrations/           SQL-миграции (0001…0016, схема ТЗ §12)
+internal/scan/        пайплайн сканера: конвейер, дедупликация (ТЗ §8.1)
+internal/connectors/  коннекторы площадок (bazos — простой, этап 3)
+internal/api/         REST API дашборда: meta, search-configs, objects, zones, оценка
+internal/zones/       импорт GeoJSON, иерархия зон, привязка объектов (этап 4)
+internal/valuation/   гедоническая модель ridge + правила отказа (этап 5, ТЗ §7.2–7.3)
+migrations/           SQL-миграции (0001…0017, схема ТЗ §12)
 config/               конфиги (config.yaml — в .gitignore)
-web/                  React + Vite + TS дашборд (этап 2), i18n ru/en
+web/                  React + Vite + TS дашборд, i18n ru/en
 ```
 
 ## Деньги (ТЗ §5)
@@ -65,7 +69,7 @@ web/                  React + Vite + TS дашборд (этап 2), i18n ru/en
 | 2. Дашборд v1 | ✅ завершён ([отчёт](.handoff/stage2-report.md)) |
 | 3. Реестр атрибутов + коннектор | ✅ завершён ([отчёт](.handoff/stage3-report.md)) |
 | 4. Зоны OMI | ✅ завершён ([отчёт](.handoff/stage4-report.md)) |
-| 5. Гедоническая модель | не начат |
+| 5. Гедоническая модель | ✅ завершён ([отчёт](.handoff/stage5-report.md)) |
 | 6. delisted-логика | не начат |
 | 7. Модель ликвидности | не начат |
 | 8. Telegram-бот | не начат (нужен токен) |

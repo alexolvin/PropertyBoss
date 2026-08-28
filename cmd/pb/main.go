@@ -69,6 +69,10 @@ func main() {
 		if err := runZones(ctx, cfg, os.Args[2:]); err != nil {
 			log.Fatal(err)
 		}
+	case "valuate":
+		if err := runValuate(ctx, cfg, os.Args[2:]); err != nil {
+			log.Fatal(err)
+		}
 	default:
 		usage()
 	}
@@ -88,6 +92,7 @@ func usage() {
   pb zones assign [--config PATH]  привязка объектов к зонам (этап 4)
   pb zones link -country XX -level L [--config PATH]  parent_id по геометрии (этап 4)
   pb zones list [-country XX] [-level L] [--config PATH]  просмотр зон (этап 4)
+  pb valuate [-country XX] [-deal-type T] [--config PATH]  гедоническая оценка (этап 5, ТЗ §7.2–7.3)
 
 Конфиг: --config | $PB_CONFIG | config/config.yaml`)
 	os.Exit(2)

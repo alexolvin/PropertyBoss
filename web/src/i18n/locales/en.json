@@ -64,7 +64,19 @@
     "all_status": "All statuses",
     "page": "Page",
     "of": "of",
-    "rooms_short": "rm"
+    "rooms_short": "rm",
+    "valuation": "Valuation (model)",
+    "valuation_no_interval": "interval unavailable",
+    "valuation_fallback": "zone: parent level used",
+    "valuation_tooltip": "Price vs model {{version}} (n={{n}}, R²={{r2}}); parentheses — 95% prediction interval",
+    "valuation_reason_no_price": "no price",
+    "valuation_reason_no_area": "no area",
+    "valuation_reason_currency_mismatch": "not market currency",
+    "valuation_reason_no_observations": "no observations for model",
+    "valuation_reason_insufficient_observations": "too few observations for model",
+    "valuation_reason_attribute_missing_rate": "attribute missing rate too high",
+    "valuation_reason_degenerate_prediction": "degenerate prediction",
+    "valuation_reason_unknown": "no valuation"
   },
   "zones": {
     "all_countries": "All countries",

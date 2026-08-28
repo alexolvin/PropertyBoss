@@ -51,6 +51,28 @@ type Config struct {
 		// оператор, вежливый уровень для публичного сайта (ТЗ §0.1).
 		PageDelayMS int `yaml:"page_delay_ms"`
 	} `yaml:"scan"`
+
+	// Valuation — гедоническая модель (этап 5, ТЗ §7.2–7.3).
+	// ТЗ §7.3: «значение min_obs_per_param в конфиге, не в коде».
+	Valuation struct {
+		// Минимум наблюдений на параметр модели (ТЗ §7.3, «отраслевой
+		// ориентир — от 10 наблюдений на параметр»).
+		MinObsPerParam int `yaml:"min_obs_per_param"`
+		// Зона с числом активных наблюдений меньше этого берёт zone_effect
+		// с родительского уровня иерархии, результат помечается
+		// zone_fallback=true (ТЗ §7.3). Допущение исполнителя: 30.
+		MinObsPerZone int `yaml:"min_obs_per_zone"`
+		// Порог доли пропусков по ключевому (участвующему в модели)
+		// атрибуту, (0,1]: превышение — модель отклоняется (ТЗ §7.3).
+		// Допущение исполнителя: 0.5.
+		MaxMissingRate float64 `yaml:"max_missing_rate"`
+		// Число складок k-fold кросс-валидации для подбора λ (ТЗ §7.2:
+		// «λ подбирается k-fold кросс-валидацией, а не назначается»).
+		KFold int `yaml:"kfold"`
+		// Кандидаты λ для гребневой регуляризации, по возрастанию.
+		// Допущение исполнителя: стандартная логарифмическая сетка.
+		LambdaGrid []float64 `yaml:"lambda_grid"`
+	} `yaml:"valuation"`
 }
 
 // DedupeParams — пороги сопоставления для одной страны.
@@ -118,6 +140,29 @@ func Load(path string) (*Config, error) {
 	}
 	if c.Scan.PageDelayMS == 0 {
 		c.Scan.PageDelayMS = 1000 // разумный вежливый уровень по умолчанию
+	}
+	if c.Valuation.MinObsPerParam < 1 {
+		return nil, fmt.Errorf("config: valuation.min_obs_per_param должен быть >= 1, задано %d (ТЗ §7.3)", c.Valuation.MinObsPerParam)
+	}
+	if c.Valuation.MinObsPerZone < 1 {
+		return nil, fmt.Errorf("config: valuation.min_obs_per_zone должен быть >= 1, задано %d (ТЗ §7.3)", c.Valuation.MinObsPerZone)
+	}
+	if c.Valuation.MaxMissingRate <= 0 || c.Valuation.MaxMissingRate > 1 {
+		return nil, fmt.Errorf("config: valuation.max_missing_rate должен быть в (0, 1], задано %v (ТЗ §7.3)", c.Valuation.MaxMissingRate)
+	}
+	if c.Valuation.KFold < 2 {
+		return nil, fmt.Errorf("config: valuation.kfold должен быть >= 2, задано %d (ТЗ §7.2)", c.Valuation.KFold)
+	}
+	if len(c.Valuation.LambdaGrid) == 0 {
+		return nil, fmt.Errorf("config: valuation.lambda_grid не задан (ТЗ §7.2)")
+	}
+	for i, l := range c.Valuation.LambdaGrid {
+		if l <= 0 {
+			return nil, fmt.Errorf("config: valuation.lambda_grid[%d] должен быть > 0, задано %v", i, l)
+		}
+		if i > 0 && l < c.Valuation.LambdaGrid[i-1] {
+			return nil, fmt.Errorf("config: valuation.lambda_grid не отсортирован по возрастанию (позиция %d)", i)
+		}
 	}
 	return &c, nil
 }
