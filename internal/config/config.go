@@ -87,6 +87,29 @@ type Config struct {
 		// Таймаут прямого URL-чека объявления, с (ТЗ §8.2, защита 4).
 		URLCheckTimeoutSec int `yaml:"url_check_timeout_sec"`
 	} `yaml:"delist"`
+
+	// Liquidity — модель ликвидности (этап 7, ТЗ §9): дискретная модель
+	// дожития на недельных person-period интервалах.
+	Liquidity struct {
+		// Минимум завершённых наблюдений (объектов, ушедших с рынка),
+		// накопившихся до обучения модели. ТЗ §9.3: «до этого поле
+		// hazard_probability равно NULL с причиной insufficient_history».
+		// Допущение исполнителя: 100.
+		MinEvents int `yaml:"min_events"`
+		// Порог калибровки (ТЗ §9.4): модель публикуется, только если
+		// максимальное отклонение калибровочной кривой (по децилям
+		// предсказанной вероятности) не превышает этого значения.
+		// Допущение исполнителя: 0.10 (10 процентных пунктов).
+		MaxCalibDev float64 `yaml:"max_calib_dev"`
+		// Горизонт прогноза T, дней: выход модели — вероятность ухода
+		// с рынка в ближайшие T дней (ТЗ §9.2). Недельная дискретизация:
+		// P(T) = 1 − ∏(1 − h_w) по первым ceil(T/7) неделям.
+		HorizonDays int `yaml:"horizon_days"`
+		// Доля хвоста окна наблюдений, используемого как отложенная по
+		// времени проверка (ТЗ §9.4: обучение до T, проверка после T;
+		// случайное разбиение запрещено). Допущение исполнителя: 0.25.
+		HoldoutRatio float64 `yaml:"holdout_ratio"`
+	} `yaml:"liquidity"`
 }
 
 // DedupeParams — пороги сопоставления для одной страны.
@@ -187,6 +210,19 @@ func Load(path string) (*Config, error) {
 	}
 	if c.Delist.URLCheckTimeoutSec < 1 {
 		return nil, fmt.Errorf("config: delist.url_check_timeout_sec должен быть >= 1, задано %d (ТЗ §8.2)", c.Delist.URLCheckTimeoutSec)
+	}
+	// Liquidity (ТЗ §9).
+	if c.Liquidity.MinEvents < 10 {
+		return nil, fmt.Errorf("config: liquidity.min_events должен быть >= 10, задано %d (ТЗ §9.3: прогноз только при достаточном числе событий)", c.Liquidity.MinEvents)
+	}
+	if c.Liquidity.MaxCalibDev <= 0 || c.Liquidity.MaxCalibDev > 1 {
+		return nil, fmt.Errorf("config: liquidity.max_calib_dev должен быть в (0, 1], задано %v (ТЗ §9.4)", c.Liquidity.MaxCalibDev)
+	}
+	if c.Liquidity.HorizonDays < 7 {
+		return nil, fmt.Errorf("config: liquidity.horizon_days должен быть >= 7 (недельная дискретизация), задано %d (ТЗ §9.2)", c.Liquidity.HorizonDays)
+	}
+	if c.Liquidity.HoldoutRatio <= 0 || c.Liquidity.HoldoutRatio >= 0.5 {
+		return nil, fmt.Errorf("config: liquidity.holdout_ratio должен быть в (0, 0.5), задано %v (ТЗ §9.4)", c.Liquidity.HoldoutRatio)
 	}
 	return &c, nil
 }

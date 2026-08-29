@@ -38,17 +38,18 @@ go run ./cmd/pb serve
 ## Структура
 
 ```
-cmd/pb/               бинарь: migrate | fx sync | serve | scan | zones | valuate
+cmd/pb/               бинарь: migrate | fx sync | serve | scan | zones | valuate | liquidity | delist
 internal/config/      YAML-конфиг с валидацией
 internal/db/          пул pgx + раннер миграций (schema_migrations)
 internal/money/       деньги: int64 в минорных единицах, конвертация через big.Rat (без float, ТЗ §5)
 internal/fx/          клиент XML-фида ЕЦБ + загрузчик в fx_rates
 internal/scan/        пайплайн сканера: конвейер, дедупликация (ТЗ §8.1)
 internal/connectors/  коннекторы площадок (bazos — простой, этап 3)
-internal/api/         REST API дашборда: meta, search-configs, objects, zones, оценка
+internal/api/         REST API дашборда: meta, search-configs, objects, zones, оценка, ликвидность
 internal/zones/       импорт GeoJSON, иерархия зон, привязка объектов (этап 4)
 internal/valuation/   гедоническая модель ridge + правила отказа (этап 5, ТЗ §7.2–7.3)
-migrations/           SQL-миграции (0001…0017, схема ТЗ §12)
+internal/liquidity/   модель ликвидности: person-period, логистическая регрессия, калибровка (этап 7, ТЗ §9)
+migrations/           SQL-миграции (0001…0019, схема ТЗ §12)
 config/               конфиги (config.yaml — в .gitignore)
 web/                  React + Vite + TS дашборд, i18n ru/en
 ```
@@ -71,7 +72,7 @@ web/                  React + Vite + TS дашборд, i18n ru/en
 | 4. Зоны OMI | ✅ завершён ([отчёт](.handoff/stage4-report.md)) |
 | 5. Гедоническая модель | ✅ завершён ([отчёт](.handoff/stage5-report.md)) |
 | 6. delisted-логика + защиты | ✅ завершён ([отчёт](.handoff/stage6-report.md)) |
-| 7. Модель ликвидности | не начат |
+| 7. Модель ликвидности | ✅ завершён ([отчёт](.handoff/stage7-report.md)) |
 | 8. Telegram-бот | не начат (нужен токен) |
 | 9. Phone-agent | не начат (нужен телефон) |
 | 10. Переводчик | не начат (нужен API-ключ LLM) |

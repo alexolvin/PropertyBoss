@@ -47,6 +47,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("DELETE /api/search-configs/{id}", s.handleDeleteSearchConfig)
 	mux.HandleFunc("GET /api/objects", s.handleListObjects)
 	mux.HandleFunc("GET /api/objects/{id}", s.handleGetObject)
+	mux.HandleFunc("GET /api/liquidity", s.handleGetLiquidity)
 	mux.HandleFunc("GET /api/zones", s.handleListZones)
 	return mux
 }

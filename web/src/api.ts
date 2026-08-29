@@ -69,6 +69,20 @@ export interface Valuation {
   computed_at: string | null
 }
 
+/**
+ * Вероятность ухода объекта с рынка за horizon_days дней
+ * (liquidity_estimates, ТЗ §9.2–9.3): NULL с причиной, пока модель
+ * не опубликована. Предсказанное — уход с рынка, НЕ продажа.
+ */
+export interface Hazard {
+  horizon_days: number | null
+  probability: number | null
+  null_reason?: string | null
+  model_version: string | null
+  events_in_training: number
+  computed_at: string | null
+}
+
 export interface ObjectItem {
   id: number
   country: string
@@ -85,6 +99,7 @@ export interface ObjectItem {
   currency: string | null
   price_display: PriceDisplay | null
   valuation: Valuation | null
+  hazard: Hazard | null
   status: 'active' | 'delisted'
   delisted_reason: string | null
   first_seen_at: string
@@ -97,6 +112,60 @@ export interface ObjectsPage {
   page: number
   per_page: number
   objects: ObjectItem[]
+}
+
+/** Точка калибровочной кривой: дециль предсказанной вероятности (ТЗ §9.4). */
+export interface LiquidityCalibDecile {
+  decile: number
+  predicted: number
+  actual: number
+  n: number
+}
+
+export interface LiquidityBrierDecomp {
+  reliability: number
+  resolution: number
+  uncertainty: number
+}
+
+/**
+ * Последняя версия модели ликвидности (liquidity_models, ТЗ §9.4):
+ * метрики валидации хранятся вместе с версией модели.
+ */
+export interface LiquidityModel {
+  model_version: string
+  country: string
+  deal_type: string
+  status: 'published' | 'uncalibrated' | 'insufficient_history'
+  reject_reason?: string | null
+  horizon_days: number
+  min_events: number
+  n_completed_events: number
+  n_person_periods: number
+  n_params: number | null
+  train_cutoff_at: string | null
+  n_train: number
+  n_test: number
+  calibration: LiquidityCalibDecile[] | null
+  max_calib_dev: number | null
+  brier_score: number | null
+  brier_decomp: LiquidityBrierDecomp | null
+  c_index: number | null
+  params: Record<string, number> | null
+  computed_at: string
+}
+
+export interface LiquidityParams {
+  country?: string
+  deal_type?: string
+}
+
+export function getLiquidity(params: LiquidityParams): Promise<{ model: LiquidityModel | null }> {
+  const qs = new URLSearchParams()
+  if (params.country) qs.set('country', params.country)
+  if (params.deal_type) qs.set('deal_type', params.deal_type)
+  const s = qs.toString()
+  return get<{ model: LiquidityModel | null }>(`/api/liquidity${s ? `?${s}` : ''}`)
 }
 
 export interface ZoneItem {

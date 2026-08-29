@@ -38,6 +38,11 @@ delist:
   min_consecutive_misses: 2
   max_delisted_share_pct: 25
   url_check_timeout_sec: 10
+liquidity:
+  min_events: 100
+  max_calib_dev: 0.10
+  horizon_days: 30
+  holdout_ratio: 0.25
 `
 
 const delistBlockDefault = "delist:\n  min_consecutive_misses: 2\n  max_delisted_share_pct: 25\n  url_check_timeout_sec: 10"
@@ -68,6 +73,51 @@ func TestLoadDelistValidation(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			_, err := Load(writeCfg(t, c.block))
+			if c.want == "" {
+				if err != nil {
+					t.Fatalf("Load: %v, ждали успех", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), c.want) {
+				t.Fatalf("Load: %v, ждали ошибку про %q", err, c.want)
+			}
+		})
+	}
+}
+
+// Этап 7 (ТЗ §9): валидация блока liquidity — пороги min_events и
+// калибровки живут в конфиге (ТЗ §0.1).
+
+const liquidityBlockDefault = "liquidity:\n  min_events: 100\n  max_calib_dev: 0.10\n  horizon_days: 30\n  holdout_ratio: 0.25"
+
+func writeCfgLiq(t *testing.T, block string) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(p, []byte(strings.Replace(cfgBase, liquidityBlockDefault, block, 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func TestLoadLiquidityValidation(t *testing.T) {
+	cases := []struct {
+		name  string
+		block string
+		want  string // ожидаемый фрагмент ошибки; "" — ошибки нет
+	}{
+		{"valid", liquidityBlockDefault, ""},
+		{"events_5", "liquidity:\n  min_events: 5\n  max_calib_dev: 0.10\n  horizon_days: 30\n  holdout_ratio: 0.25", "min_events"},
+		{"calib_0", "liquidity:\n  min_events: 100\n  max_calib_dev: 0\n  horizon_days: 30\n  holdout_ratio: 0.25", "max_calib_dev"},
+		{"calib_2", "liquidity:\n  min_events: 100\n  max_calib_dev: 2\n  horizon_days: 30\n  holdout_ratio: 0.25", "max_calib_dev"},
+		{"horizon_3", "liquidity:\n  min_events: 100\n  max_calib_dev: 0.10\n  horizon_days: 3\n  holdout_ratio: 0.25", "horizon_days"},
+		{"holdout_0", "liquidity:\n  min_events: 100\n  max_calib_dev: 0.10\n  horizon_days: 30\n  holdout_ratio: 0", "holdout_ratio"},
+		{"holdout_05", "liquidity:\n  min_events: 100\n  max_calib_dev: 0.10\n  horizon_days: 30\n  holdout_ratio: 0.5", "holdout_ratio"},
+		{"missing", "", "min_events"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := Load(writeCfgLiq(t, c.block))
 			if c.want == "" {
 				if err != nil {
 					t.Fatalf("Load: %v, ждали успех", err)

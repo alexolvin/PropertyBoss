@@ -83,6 +83,31 @@ export default function ObjectsView({ meta, displayCurrency }: Props) {
     )
   }
 
+  // Ликвидность (ТЗ §9.2–9.3): вероятность ухода с рынка, не продажи.
+  // NULL с причиной, пока модель не опубликована.
+  const renderHazard = (o: ObjectItem) => {
+    const h = o.hazard
+    if (!h) return <span className="muted">—</span>
+    if (h.probability == null) {
+      const prefix = h.null_reason ? h.null_reason.split(':')[0].trim() : ''
+      return (
+        <span className="muted" title={h.null_reason ?? ''}>
+          {t(`objects.hazard_reason_${prefix}`, { defaultValue: h.null_reason ?? '—' })}
+        </span>
+      )
+    }
+    const title = t('objects.hazard_tooltip', {
+      days: h.horizon_days ?? '—',
+      version: h.model_version ?? '—',
+      n: h.events_in_training,
+    })
+    return (
+      <span title={title}>
+        {(h.probability * 100).toFixed(1)}%
+      </span>
+    )
+  }
+
   const pages = data ? Math.max(1, Math.ceil(data.total / data.per_page)) : 1
 
   return (
@@ -128,6 +153,7 @@ export default function ObjectsView({ meta, displayCurrency }: Props) {
                 <th>{t('objects.price')}</th>
                 {displayCurrency && <th>{t('objects.price_display')}</th>}
                 <th>{t('objects.valuation')}</th>
+                <th>{t('objects.hazard')}</th>
                 <th>{t('objects.status')}</th>
                 <th>{t('objects.first_seen')}</th>
                 <th>{t('objects.last_seen')}</th>
@@ -196,6 +222,7 @@ export default function ObjectsView({ meta, displayCurrency }: Props) {
                     </td>
                   )}
                   <td>{renderValuation(o)}</td>
+                  <td>{renderHazard(o)}</td>
                   <td>
                     {o.status === 'active' ? (
                       <span className="tag">{t('objects.status_active')}</span>

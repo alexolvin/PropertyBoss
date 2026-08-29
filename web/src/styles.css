@@ -105,3 +105,25 @@ input:focus, select:focus { outline: 2px solid #4a7ddb44; }
 
 .toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
 .pager { display: flex; gap: 8px; align-items: center; font-size: 14px; }
+
+/* --- Ликвидность (этап 7, ТЗ §9) --- */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 8px 16px;
+  margin: 12px 0;
+}
+.stat {
+  border: 1px solid light-dark(#e2e5ea, #2a2f37);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+.stat-label { font-size: 12px; color: light-dark(#5a6068, #9aa1ab); }
+.stat-value { font-size: 14px; margin-top: 2px; word-break: break-all; }
+.calib-svg { max-width: 460px; width: 100%; height: auto; display: block; }
+.calib-axis { stroke: light-dark(#5a6068, #9aa1ab); stroke-width: 1; }
+.calib-grid line { stroke: light-dark(#eceef1, #23272e); stroke-width: 1; }
+.calib-diag { stroke: light-dark(#b6bcc6, #4a5160); stroke-width: 1; stroke-dasharray: 4 4; }
+.calib-curve { stroke: light-dark(#2f6fd0, #6ea3ff); stroke-width: 2; }
+.calib-dot { fill: light-dark(#2f6fd0, #6ea3ff); }
+.calib-label { font-size: 11px; fill: light-dark(#5a6068, #9aa1ab); }

@@ -38,6 +38,18 @@ type valuationOut struct {
 	ComputedAt        *time.Time `json:"computed_at"`
 }
 
+// hazardOut — вероятность ухода объекта с рынка за horizon_days дней
+// (liquidity_estimates, этап 7, ТЗ §9.2–9.3): NULL с причиной, пока
+// модель не опубликована; предсказанное — уход с рынка, не продажа.
+type hazardOut struct {
+	HorizonDays      *int       `json:"horizon_days"`
+	Probability      *float64   `json:"probability"`
+	NullReason       *string    `json:"null_reason,omitempty"`
+	ModelVersion     *string    `json:"model_version"`
+	EventsInTraining int        `json:"events_in_training"`
+	ComputedAt       *time.Time `json:"computed_at"`
+}
+
 type objectOut struct {
 	ID             int64         `json:"id"`
 	Country        string        `json:"country"`
@@ -54,6 +66,7 @@ type objectOut struct {
 	Currency       *string       `json:"currency"`
 	PriceDisplay   *priceDisplay `json:"price_display,omitempty"`
 	Valuation      *valuationOut `json:"valuation,omitempty"`
+	Hazard         *hazardOut    `json:"hazard,omitempty"`
 	Status         string        `json:"status"`
 	DelistedReason *string       `json:"delisted_reason"`
 	FirstSeenAt    time.Time     `json:"first_seen_at"`
@@ -69,7 +82,8 @@ const objectsSelect = `objects.id, objects.country, objects.deal_type, objects.z
 	objects.current_price_minor, objects.currency, objects.status, objects.delisted_reason, objects.first_seen_at, objects.last_seen_at, objects.delisted_at,
 	z.name AS zone_name, z.level AS zone_level, z.source AS zone_source,
 	v.model_version, v.price_deviation, v.deviation_null_reason, v.predicted_price_minor,
-	v.interval_low_minor, v.interval_high_minor, v.sample_size, v.r_squared, v.zone_fallback, v.computed_at`
+	v.interval_low_minor, v.interval_high_minor, v.sample_size, v.r_squared, v.zone_fallback, v.computed_at,
+	h.horizon_days, h.hazard_probability, h.null_reason, h.model_version, h.events_in_training, h.computed_at`
 
 const objectsFrom = ` FROM objects
 		LEFT JOIN zones z ON z.id = objects.zone_id
@@ -77,7 +91,12 @@ const objectsFrom = ` FROM objects
 			SELECT v2.* FROM valuations v2 WHERE v2.object_id = objects.id
 			ORDER BY v2.computed_at DESC, v2.id DESC
 			LIMIT 1
-		) v ON true`
+		) v ON true
+		LEFT JOIN LATERAL (
+			SELECT h2.* FROM liquidity_estimates h2 WHERE h2.object_id = objects.id
+			ORDER BY h2.computed_at DESC, h2.horizon_days DESC
+			LIMIT 1
+		) h ON true`
 
 // attachValuation — подвешивает последнюю оценку, если она есть
 // (LEFT JOIN LATERAL → все v.* NULL, когда valuations пусто).
@@ -93,6 +112,20 @@ func attachValuation(o *objectOut, val *valuationOut, size *int, fb *bool) {
 	}
 	val.ZoneFallback = fb != nil && *fb
 	o.Valuation = val
+}
+
+// attachHazard — последняя вероятность ухода с рынка, если она есть
+// (LEFT JOIN LATERAL → все h.* NULL, когда прогноза ещё нет).
+// events_in_training в таблице NOT NULL, но приходит NULL без строки.
+func attachHazard(o *objectOut, hz *hazardOut, size *int) {
+	if hz.ModelVersion == nil {
+		return
+	}
+	hz.EventsInTraining = 0
+	if size != nil {
+		hz.EventsInTraining = *size
+	}
+	o.Hazard = hz
 }
 
 // applyDisplay заполняет PriceDisplay суммой в displayTo по курсу на дату
@@ -190,16 +223,20 @@ func (s *Server) handleListObjects(w http.ResponseWriter, r *http.Request) {
 		var val valuationOut
 		var valSize *int
 		var valFB *bool
+		var hz hazardOut
+		var hzSize *int
 		if err := rows.Scan(&o.ID, &o.Country, &o.DealType, &o.ZoneID, &o.Address,
 			&o.AreaSqM, &o.Rooms, &o.PropertyType, &o.PriceMinor, &o.Currency,
 			&o.Status, &o.DelistedReason, &o.FirstSeenAt, &o.LastSeenAt, &o.DelistedAt,
 			&o.ZoneName, &o.ZoneLevel, &o.ZoneSource,
 			&val.ModelVersion, &val.PriceDeviation, &val.NullReason, &val.PredictedMinor,
-			&val.IntervalLowMinor, &val.IntervalHighMinor, &valSize, &val.RSquared, &valFB, &val.ComputedAt); err != nil {
+			&val.IntervalLowMinor, &val.IntervalHighMinor, &valSize, &val.RSquared, &valFB, &val.ComputedAt,
+			&hz.HorizonDays, &hz.Probability, &hz.NullReason, &hz.ModelVersion, &hzSize, &hz.ComputedAt); err != nil {
 			writeErr(w, err)
 			return
 		}
 		attachValuation(&o, &val, valSize, valFB)
+		attachHazard(&o, &hz, hzSize)
 		if err := s.applyDisplay(ctx, &o, displayTo, conv); err != nil {
 			writeErr(w, err)
 			return
@@ -225,18 +262,22 @@ func (s *Server) handleGetObject(w http.ResponseWriter, r *http.Request) {
 	var val valuationOut
 	var valSize *int
 	var valFB *bool
+	var hz hazardOut
+	var hzSize *int
 	err = s.Pool.QueryRow(ctx, "SELECT "+objectsSelect+objectsFrom+" WHERE objects.id = $1", id).
 		Scan(&o.ID, &o.Country, &o.DealType, &o.ZoneID, &o.Address, &o.AreaSqM, &o.Rooms,
 			&o.PropertyType, &o.PriceMinor, &o.Currency, &o.Status, &o.DelistedReason,
 			&o.FirstSeenAt, &o.LastSeenAt, &o.DelistedAt,
 			&o.ZoneName, &o.ZoneLevel, &o.ZoneSource,
 			&val.ModelVersion, &val.PriceDeviation, &val.NullReason, &val.PredictedMinor,
-			&val.IntervalLowMinor, &val.IntervalHighMinor, &valSize, &val.RSquared, &valFB, &val.ComputedAt)
+			&val.IntervalLowMinor, &val.IntervalHighMinor, &valSize, &val.RSquared, &valFB, &val.ComputedAt,
+			&hz.HorizonDays, &hz.Probability, &hz.NullReason, &hz.ModelVersion, &hzSize, &hz.ComputedAt)
 	if err != nil {
 		writeErr(w, httpError(http.StatusNotFound, "объект %d не найден", id))
 		return
 	}
 	attachValuation(&o, &val, valSize, valFB)
+	attachHazard(&o, &hz, hzSize)
 	var displayTo *money.Currency
 	var conv func(minor int64, from money.Currency, onDate time.Time) (int64, *fx.RateLookup, error)
 	if dc := r.URL.Query().Get("display_currency"); dc != "" {
