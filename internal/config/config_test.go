@@ -43,6 +43,17 @@ liquidity:
   max_calib_dev: 0.10
   horizon_days: 30
   holdout_ratio: 0.25
+schedule:
+  exploration_fraction: 0.10
+  ma_window_days: 14
+  min_obs_for_tuning: 14
+  backoff_base_minutes: 60
+  backoff_multiplier: 2
+  backoff_max_hours: 72
+  recovery_step: 1.5
+  min_rate_factor: 0.25
+  country_timezones:
+    CZ: Europe/Prague
 `
 
 const delistBlockDefault = "delist:\n  min_consecutive_misses: 2\n  max_delisted_share_pct: 25\n  url_check_timeout_sec: 10"
@@ -129,4 +140,99 @@ func TestLoadLiquidityValidation(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Этап 11 (ТЗ §10): валидация блока schedule.
+
+const scheduleBlockDefault = `schedule:
+  exploration_fraction: 0.10
+  ma_window_days: 14
+  min_obs_for_tuning: 14
+  backoff_base_minutes: 60
+  backoff_multiplier: 2
+  backoff_max_hours: 72
+  recovery_step: 1.5
+  min_rate_factor: 0.25
+  country_timezones:
+    CZ: Europe/Prague`
+
+func writeCfgSched(t *testing.T, block string) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(p, []byte(strings.Replace(cfgBase, scheduleBlockDefault, block, 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func TestLoadScheduleValidation(t *testing.T) {
+	cases := []struct {
+		name  string
+		block string
+		want  string // ожидаемый фрагмент ошибки; "" — ошибки нет
+	}{
+		{"valid", scheduleBlockDefault, ""},
+		{"eps_0", schedBlock("exploration_fraction: 0"), "exploration_fraction"},
+		{"eps_06", schedBlock("exploration_fraction: 0.6"), "exploration_fraction"},
+		{"ma_0", schedBlock("ma_window_days: 0"), "ma_window_days"},
+		{"minobs_0", schedBlock("min_obs_for_tuning: 0"), "min_obs_for_tuning"},
+		{"base_0", schedBlock("backoff_base_minutes: 0"), "backoff_base_minutes"},
+		{"mult_05", schedBlock("backoff_multiplier: 0.5"), "backoff_multiplier"},
+		{"max_0", schedBlock("backoff_max_hours: 0"), "backoff_max_hours"},
+		{"base_gt_max", schedBlock("backoff_base_minutes: 120", "backoff_max_hours: 1"), "backoff_base_minutes"},
+		{"recovery_1", schedBlock("recovery_step: 1"), "recovery_step"},
+		{"rate_1", schedBlock("min_rate_factor: 1"), "min_rate_factor"},
+		{"rate_0", schedBlock("min_rate_factor: 0"), "min_rate_factor"},
+		{"tz_missing", "schedule:\n  exploration_fraction: 0.10\n  ma_window_days: 14\n  min_obs_for_tuning: 14\n  backoff_base_minutes: 60\n  backoff_multiplier: 2\n  backoff_max_hours: 72\n  recovery_step: 1.5\n  min_rate_factor: 0.25", "country_timezones"},
+		{"tz_bad", schedBlock("CZ: Mars/Olympus"), "неизвестный IANA-пояс"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := Load(writeCfgSched(t, c.block))
+			if c.want == "" {
+				if err != nil {
+					t.Fatalf("Load: %v, ждали успех", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), c.want) {
+				t.Fatalf("Load: %v, ждали ошибку про %q", err, c.want)
+			}
+		})
+	}
+}
+
+// schedBlock — schedule-блок из scheduleBlockDefault с заменёнными
+// строками (по одной или две): schedBlock("backoff_max_hours: 1").
+func schedBlock(lines ...string) string {
+	out := scheduleBlockDefault
+	// Ключ — имя параметра (до «:»), значение — строка блока по умолчанию.
+	defaults := map[string]string{
+		"exploration_fraction": "exploration_fraction: 0.10",
+		"ma_window_days":       "ma_window_days: 14",
+		"min_obs_for_tuning":   "min_obs_for_tuning: 14",
+		"backoff_base_minutes": "backoff_base_minutes: 60",
+		"backoff_multiplier":   "backoff_multiplier: 2",
+		"backoff_max_hours":    "backoff_max_hours: 72",
+		"recovery_step":        "recovery_step: 1.5",
+		"min_rate_factor":      "min_rate_factor: 0.25",
+		"CZ":                   "CZ: Europe/Prague",
+	}
+	for _, line := range lines {
+		name := line[:len(line)-len(valueOf(line))]
+		old := line
+		if d, ok := defaults[name]; ok {
+			old = d
+		}
+		out = strings.Replace(out, old, line, 1)
+	}
+	return out
+}
+
+// valueOf — хвост строки «key: value» после первого ':'.
+func valueOf(line string) string {
+	if i := strings.IndexByte(line, ':'); i >= 0 {
+		return line[i:]
+	}
+	return ""
 }

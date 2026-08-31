@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"propertyboss/internal/config"
+	"propertyboss/internal/db"
 )
 
 // gauss — нормальный шум (Box-Muller) для синтетических выборок.
@@ -278,17 +279,28 @@ func testPool(t *testing.T) *pgxpool.Pool {
 	if err != nil {
 		t.Fatalf("pool: %v", err)
 	}
+	unlock, err := db.LiveTestLock(context.Background(), pool)
+	if err != nil {
+		t.Fatalf("live lock: %v", err)
+	}
+	// t.Cleanup идёт LIFO: тестовые сетыпы регистрируют sweep ПОСЛЕ
+	// unlock — чистка работает под локом, лок отпущен последним.
 	t.Cleanup(pool.Close)
+	t.Cleanup(unlock)
 	return pool
 }
 
-func ttCfg() *config.Config {
-	// Минимальный конфиг прогона: страна-заглушка 'TT' с валютой рынка EUR;
+func vvCfg() *config.Config {
+	// Минимальный конфиг прогона: страна-заглушка 'VV' с валютой рынка EUR;
 	// пороги намеренно ниже реальных — тестовая выборка мала.
+	// Отдельная песочная страна (не 'TT' пакета zones): go test гоняет
+	// бинари пакетов параллельно, и общий country позволял cleanup
+	// одного бинаря стирать фикстуры другого (FK-срывы в параллельном
+	// свипе, поймано на этапе 11).
 	cfg := &config.Config{}
-	cfg.Dashboard.Countries = []string{"TT"}
+	cfg.Dashboard.Countries = []string{"VV"}
 	cfg.Dashboard.DealTypes = []string{"sale"}
-	cfg.Dashboard.MarketCurrencies = map[string]string{"TT": "EUR"}
+	cfg.Dashboard.MarketCurrencies = map[string]string{"VV": "EUR"}
 	cfg.Valuation.MinObsPerParam = 2
 	cfg.Valuation.MinObsPerZone = 3
 	cfg.Valuation.MaxMissingRate = 0.5
@@ -297,28 +309,28 @@ func ttCfg() *config.Config {
 	return cfg
 }
 
-// ttSetup — зоны (регион + 2 муниципалитета), атрибут, объекты-подопытные.
+// vvSetup — зоны (регион + 2 муниципалитета), атрибут, объекты-подопытные.
 // 40 объектов в M2 (большая зона, ≥ min_obs_per_zone), 2 в M1 (малая →
 // zone_fallback на регион), 1 без цены, 1 в не рыночной валюте (CZK),
 // 1 с NULL валютой (objects.currency — nullable; регрессия: скан в
 // string падал, честная причина — no_currency).
 // Возвращает id зон M1/M2 и id особых объектов; cleanup — в t.Cleanup.
-func ttSetup(t *testing.T, pool *pgxpool.Pool, sampleCount int) (m1, m2, noPrice, czkObj, noCur int64) {
+func vvSetup(t *testing.T, pool *pgxpool.Pool, sampleCount int) (m1, m2, noPrice, czkObj, noCur int64) {
 	t.Helper()
 	ctx := context.Background()
 	geom := "MULTIPOLYGON(((0 0,1 0,1 1,0 1,0 0)))"
 	var region int64
 	if err := pool.QueryRow(ctx,
 		`INSERT INTO zones (country, level, name, geom, source)
-		 VALUES ('TT', 'region', 'TT-Region', ST_GeogFromText($1), 'test') RETURNING id`, geom).
+		 VALUES ('VV', 'region', 'VV-Region', ST_GeogFromText($1), 'test') RETURNING id`, geom).
 		Scan(&region); err != nil {
 		t.Fatalf("zone region: %v", err)
 	}
 	mv := []int64{0, 0}
-	for i, name := range []string{"TT-M1", "TT-M2"} {
+	for i, name := range []string{"VV-M1", "VV-M2"} {
 		if err := pool.QueryRow(ctx,
 			`INSERT INTO zones (country, level, parent_id, name, geom, source)
-			 VALUES ('TT', 'municipality', $1, $2, ST_GeogFromText($3), 'test') RETURNING id`,
+			 VALUES ('VV', 'municipality', $1, $2, ST_GeogFromText($3), 'test') RETURNING id`,
 			region, name, geom).Scan(&mv[i]); err != nil {
 			t.Fatalf("zone municipality: %v", err)
 		}
@@ -327,16 +339,16 @@ func ttSetup(t *testing.T, pool *pgxpool.Pool, sampleCount int) (m1, m2, noPrice
 	if _, err := pool.Exec(ctx, `
 		INSERT INTO attribute_registry
 			(country, key, data_type, allowed_values, used_in_pricing, label_ru, label_en, source_evidence)
-		VALUES ('TT', 'has_garage', 'bool', '["false","true"]', TRUE, 'Гараж', 'Garage', 'test')`); err != nil {
+		VALUES ('VV', 'has_garage', 'bool', '["false","true"]', TRUE, 'Гараж', 'Garage', 'test')`); err != nil {
 		t.Fatalf("attribute_registry: %v", err)
 	}
 
 	t.Cleanup(func() {
 		// valuations удалятся каскадом за objects (FK ON DELETE CASCADE).
-		_, _ = pool.Exec(context.Background(), `DELETE FROM objects WHERE country = 'TT'`)
-		_, _ = pool.Exec(context.Background(), `DELETE FROM zones WHERE country = 'TT' AND parent_id IS NOT NULL`)
-		_, _ = pool.Exec(context.Background(), `DELETE FROM zones WHERE country = 'TT' AND parent_id IS NULL`)
-		_, _ = pool.Exec(context.Background(), `DELETE FROM attribute_registry WHERE country = 'TT'`)
+		_, _ = pool.Exec(context.Background(), `DELETE FROM objects WHERE country = 'VV'`)
+		_, _ = pool.Exec(context.Background(), `DELETE FROM zones WHERE country = 'VV' AND parent_id IS NOT NULL`)
+		_, _ = pool.Exec(context.Background(), `DELETE FROM zones WHERE country = 'VV' AND parent_id IS NULL`)
+		_, _ = pool.Exec(context.Background(), `DELETE FROM attribute_registry WHERE country = 'VV'`)
 	})
 
 	// currency — *string: nil → NULL в БД (проверка ветки no_currency).
@@ -345,7 +357,7 @@ func ttSetup(t *testing.T, pool *pgxpool.Pool, sampleCount int) (m1, m2, noPrice
 		area := 50 + 2*float64(daysAgo)
 		err := pool.QueryRow(ctx, `
 			INSERT INTO objects (country, deal_type, zone_id, address, area_sqm, current_price_minor, currency, attributes, first_seen_at, last_seen_at)
-			VALUES ('TT', 'sale', $1, $2, $3, $4, $5, $6::jsonb,
+			VALUES ('VV', 'sale', $1, $2, $3, $4, $5, $6::jsonb,
 			        now() - ($7 || ' days')::interval, now() - ($7 || ' days')::interval)
 			RETURNING id`,
 			zone, fmt.Sprintf("Test addr %d", daysAgo), area, priceMinor, currency,
@@ -394,9 +406,9 @@ func strPtr(s string) *string { return &s }
 func TestRunLiveFull(t *testing.T) {
 	pool := testPool(t)
 	ctx := context.Background()
-	_, _, noPrice, czkObj, noCur := ttSetup(t, pool, 40)
+	_, _, noPrice, czkObj, noCur := vvSetup(t, pool, 40)
 
-	rep, err := Run(ctx, pool, ttCfg(), "TT", "sale")
+	rep, err := Run(ctx, pool, vvCfg(), "VV", "sale")
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -420,7 +432,7 @@ func TestRunLiveFull(t *testing.T) {
 		                         AND predicted_price_minor < interval_high_minor),
 		       count(*) FILTER (WHERE zone_fallback)
 		FROM valuations v
-		WHERE v.object_id IN (SELECT id FROM objects WHERE country = 'TT')`).
+		WHERE v.object_id IN (SELECT id FROM objects WHERE country = 'VV')`).
 		Scan(&total, &withDev, &withInterval, &fb)
 	if err != nil {
 		t.Fatalf("сводка valuations: %v", err)
@@ -462,9 +474,9 @@ func TestRunLiveFull(t *testing.T) {
 func TestRunLiveInsufficient(t *testing.T) {
 	pool := testPool(t)
 	ctx := context.Background()
-	_, _, _, _, _ = ttSetup(t, pool, 5) // только 5 объектов в выборке
+	_, _, _, _, _ = vvSetup(t, pool, 5) // только 5 объектов в выборке
 
-	rep, err := Run(ctx, pool, ttCfg(), "TT", "sale")
+	rep, err := Run(ctx, pool, vvCfg(), "VV", "sale")
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -481,7 +493,7 @@ func TestRunLiveInsufficient(t *testing.T) {
 	err = pool.QueryRow(ctx, `
 		SELECT count(*), count(price_deviation)
 		FROM valuations v
-		WHERE v.object_id IN (SELECT id FROM objects WHERE country = 'TT')`).
+		WHERE v.object_id IN (SELECT id FROM objects WHERE country = 'VV')`).
 		Scan(&total, &withDev)
 	if err != nil {
 		t.Fatalf("сводка valuations: %v", err)

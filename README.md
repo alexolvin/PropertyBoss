@@ -38,7 +38,7 @@ go run ./cmd/pb serve
 ## Структура
 
 ```
-cmd/pb/               бинарь: migrate | fx sync | serve | scan | zones | valuate | liquidity | delist
+cmd/pb/               бинарь: migrate | fx sync | serve | scan | zones | valuate | liquidity | delist | schedule
 internal/config/      YAML-конфиг с валидацией
 internal/db/          пул pgx + раннер миграций (schema_migrations)
 internal/money/       деньги: int64 в минорных единицах, конвертация через big.Rat (без float, ТЗ §5)
@@ -49,7 +49,8 @@ internal/api/         REST API дашборда: meta, search-configs, objects, 
 internal/zones/       импорт GeoJSON, иерархия зон, привязка объектов (этап 4)
 internal/valuation/   гедоническая модель ridge + правила отказа (этап 5, ТЗ §7.2–7.3)
 internal/liquidity/   модель ликвидности: person-period, логистическая регрессия, калибровка (этап 7, ТЗ §9)
-migrations/           SQL-миграции (0001…0019, схема ТЗ §12)
+internal/schedule/    адаптивное расписание: окна, веса, backoff, план (этап 11, ТЗ §10)
+migrations/           SQL-миграции (0001…0020, схема ТЗ §12)
 config/               конфиги (config.yaml — в .gitignore)
 web/                  React + Vite + TS дашборд, i18n ru/en
 ```
@@ -76,7 +77,7 @@ web/                  React + Vite + TS дашборд, i18n ru/en
 | 8. Telegram-бот | не начат (нужен токен) |
 | 9. Phone-agent | не начат (нужен телефон) |
 | 10. Переводчик | не начат (нужен API-ключ LLM) |
-| 11. Адаптивное расписание | не начат |
+| 11. Адаптивное расписание | ✅ завершён ([отчёт](.handoff/stage11-report.md)) |
 | 12. Подготовка vzu5-omi (phantom killer, termux-boot) | не начат |
 | 13. Перенос всей системы на vzu5-omi | не начат |
 | 14. Резервное копирование на vzu5-claw + проверка восстановления | не начат |

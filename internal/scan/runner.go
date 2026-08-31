@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"propertyboss/internal/config"
+	"propertyboss/internal/schedule"
 )
 
 // Runner — запись результатов скана в БД: scan_runs → raw_listings →
@@ -22,11 +23,15 @@ type Runner struct {
 	Pool *pgxpool.Pool
 	// Dedupe — пороги сопоставления по странам (ТЗ §8.1, из конфига).
 	Dedupe map[string]config.DedupeParams
+	// Sched — параметры адаптивного расписания (этап 11, ТЗ §10):
+	// запись выхода полных сканов, бэкофф по капче/429. nil — режим без
+	// расписания (тесты, не требующие его).
+	Sched *schedule.Settings
 }
 
 // NewRunner — конструктор.
-func NewRunner(pool *pgxpool.Pool, dedupe map[string]config.DedupeParams) *Runner {
-	return &Runner{Pool: pool, Dedupe: dedupe}
+func NewRunner(pool *pgxpool.Pool, dedupe map[string]config.DedupeParams, sched *schedule.Settings) *Runner {
+	return &Runner{Pool: pool, Dedupe: dedupe, Sched: sched}
 }
 
 // Report — итог одного скана (для лога и отчёта этапа).
@@ -151,6 +156,33 @@ func (r *Runner) Run(ctx context.Context, sourceID string, conn Connector, cfg S
 		log.Printf("scan: run %d: обновление scan_runs: %v", runID, ferr)
 		if rep.Err == nil {
 			rep.Err = ferr
+		}
+	}
+
+	// 7. Адаптивное расписание (этап 11, ТЗ §10): выход полного скана
+	// в scan_yield, бэкофф при капче/429. Сбой здесь не переворачивает
+	// уже завершённый скан (данные в БД) — предупреждение в лог (ТЗ §0.4).
+	if r.Sched != nil {
+		loc, lerr := r.Sched.TZ(srcCountry)
+		if lerr != nil {
+			log.Printf("scan: run %d: %v", runID, lerr)
+		} else {
+			switch {
+			case rep.FailureKind == FailCaptcha || rep.FailureKind == FailHTTP429:
+				if strikes, until, err := schedule.ApplyBackoff(ctx, r.Pool, r.Sched, sourceID, now); err != nil {
+					log.Printf("scan: run %d: бэкофф: %v", runID, err)
+				} else {
+					log.Printf("scan: run %d: капча/429, срыв #%d — источник %q в cooldown до %s (ТЗ §10.4)",
+						runID, strikes, sourceID, until.Format("2006-01-02 15:04"))
+				}
+			case rep.Completeness == "complete":
+				if err := schedule.RecordYield(ctx, r.Pool, sourceID, loc, now, rep.NewObjects); err != nil {
+					log.Printf("scan: run %d: запись выхода: %v", runID, err)
+				}
+				if err := schedule.NoteSuccess(ctx, r.Pool, r.Sched, sourceID); err != nil {
+					log.Printf("scan: run %d: note success: %v", runID, err)
+				}
+			}
 		}
 	}
 	return rep

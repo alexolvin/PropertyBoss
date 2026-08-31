@@ -81,6 +81,10 @@ func main() {
 		if err := runDelist(ctx, cfg, os.Args[2:]); err != nil {
 			log.Fatal(err)
 		}
+	case "schedule":
+		if err := runSchedule(ctx, cfg, os.Args[2:]); err != nil {
+			log.Fatal(err)
+		}
 	default:
 		usage()
 	}
@@ -103,6 +107,9 @@ func usage() {
   pb valuate [-country XX] [-deal-type T] [--config PATH]  гедоническая оценка (этап 5, ТЗ §7.2–7.3)
   pb liquidity [-country XX] [-deal-type T] [--config PATH]  модель ликвидности (этап 7, ТЗ §9)
   pb delist [-source ID] [--config PATH]  прогон маркировки delisted (этап 6, ТЗ §8.2)
+  pb schedule show [--config PATH]  состояние расписания: веса, warming_up, бюджет (этап 11, ТЗ §10)
+  pb schedule run [-dry] [--config PATH]  следующий скан по расписанию, cron-точка (этап 11, ТЗ §10)
+  pb schedule init-windows -source ID [-timezone TZ] [-dow 0-6] [-hours 0-24] [-max N]  окна сканирования (этап 11, ТЗ §10)
 
 Конфиг: --config | $PB_CONFIG | config/config.yaml`)
 	os.Exit(2)

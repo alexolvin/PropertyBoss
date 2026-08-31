@@ -24,7 +24,12 @@ func TestLoadWritesGivenSource(t *testing.T) {
 	if err != nil {
 		t.Fatalf("подключение к тестовой БД: %v", err)
 	}
+	unlock, err := db.LiveTestLock(ctx, pool)
+	if err != nil {
+		t.Fatalf("live lock: %v", err)
+	}
 	t.Cleanup(pool.Close)
+	t.Cleanup(unlock)
 
 	const (
 		quote  = "CZK"

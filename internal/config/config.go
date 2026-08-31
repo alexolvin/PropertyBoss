@@ -110,6 +110,39 @@ type Config struct {
 		// случайное разбиение запрещено). Допущение исполнителя: 0.25.
 		HoldoutRatio float64 `yaml:"holdout_ratio"`
 	} `yaml:"liquidity"`
+
+	// Schedule — адаптивное расписание сканирования (этап 11, ТЗ §10).
+	// ТЗ §0.1: все пороги/коэффициенты — в конфиге, не в коде.
+	Schedule struct {
+		// Доля бюджета на исследование (ε, ТЗ §10.3): слот с нулевым
+		// выходом не отключается — ему всегда достаётся ε доли веса.
+		ExplorationFraction float64 `yaml:"exploration_fraction"`
+		// Окно скользящего среднего выхода, дней (ТЗ §10.3).
+		MAWindowDays int `yaml:"ma_window_days"`
+		// Минимум накопленных полных сканов по источнику, ниже которого
+		// расписание работает на консервативных равных весах и помечается
+		// warming_up (ТЗ §10.5: первые недели оценки выхода ненадёжны,
+		// выдавать раннюю адаптацию за «настроенную по статистике»
+		// запрещено).
+		MinObsForTuning int `yaml:"min_obs_for_tuning"`
+		// Базовая длительность кулдауна, мин (ТЗ §10.4): капча/429 →
+		// немедленно в cooldown на base * multiplier^(strikes-1).
+		BackoffBaseMinutes int `yaml:"backoff_base_minutes"`
+		// Множитель экспоненциального отката (>= 1).
+		BackoffMultiplier float64 `yaml:"backoff_multiplier"`
+		// Потолок кулдауна, часов.
+		BackoffMaxHours int `yaml:"backoff_max_hours"`
+		// Коэффициент ПОВЫШЕНИЯ rate_factor при каждом полном скане
+		// (постепенное восстановление, ТЗ §10.4; > 1).
+		RecoveryStep float64 `yaml:"recovery_step"`
+		// Нижний предел rate_factor (0,1]: после серии капчей источник
+		// сканирует не быстрее этой доли max_requests_per_hour.
+		MinRateFactor float64 `yaml:"min_rate_factor"`
+		// Часовой пояс страны объявления (IANA), по странам (ТЗ §10.2:
+		// «часовой пояс целевой страны, не сервера»). Обязателен для
+		// каждой страны из dashboard.countries.
+		CountryTimezones map[string]string `yaml:"country_timezones"`
+	} `yaml:"schedule"`
 }
 
 // DedupeParams — пороги сопоставления для одной страны.
@@ -223,6 +256,43 @@ func Load(path string) (*Config, error) {
 	}
 	if c.Liquidity.HoldoutRatio <= 0 || c.Liquidity.HoldoutRatio >= 0.5 {
 		return nil, fmt.Errorf("config: liquidity.holdout_ratio должен быть в (0, 0.5), задано %v (ТЗ §9.4)", c.Liquidity.HoldoutRatio)
+	}
+	// Schedule (ТЗ §10).
+	if c.Schedule.ExplorationFraction <= 0 || c.Schedule.ExplorationFraction > 0.5 {
+		return nil, fmt.Errorf("config: schedule.exploration_fraction должен быть в (0, 0.5], задано %v (ТЗ §10.3)", c.Schedule.ExplorationFraction)
+	}
+	if c.Schedule.MAWindowDays < 1 {
+		return nil, fmt.Errorf("config: schedule.ma_window_days должен быть >= 1, задано %d (ТЗ §10.3)", c.Schedule.MAWindowDays)
+	}
+	if c.Schedule.MinObsForTuning < 1 {
+		return nil, fmt.Errorf("config: schedule.min_obs_for_tuning должен быть >= 1, задано %d (ТЗ §10.5)", c.Schedule.MinObsForTuning)
+	}
+	if c.Schedule.BackoffBaseMinutes < 1 {
+		return nil, fmt.Errorf("config: schedule.backoff_base_minutes должен быть >= 1, задано %d (ТЗ §10.4)", c.Schedule.BackoffBaseMinutes)
+	}
+	if c.Schedule.BackoffMultiplier < 1 {
+		return nil, fmt.Errorf("config: schedule.backoff_multiplier должен быть >= 1, задано %v (ТЗ §10.4)", c.Schedule.BackoffMultiplier)
+	}
+	if c.Schedule.BackoffMaxHours < 1 {
+		return nil, fmt.Errorf("config: schedule.backoff_max_hours должен быть >= 1, задано %d (ТЗ §10.4)", c.Schedule.BackoffMaxHours)
+	}
+	if time.Duration(c.Schedule.BackoffBaseMinutes)*time.Minute > time.Duration(c.Schedule.BackoffMaxHours)*time.Hour {
+		return nil, fmt.Errorf("config: schedule.backoff_base_minutes (%d) больше backoff_max_hours (%d ч) (ТЗ §10.4)", c.Schedule.BackoffBaseMinutes, c.Schedule.BackoffMaxHours)
+	}
+	if c.Schedule.RecoveryStep <= 1 {
+		return nil, fmt.Errorf("config: schedule.recovery_step должен быть > 1, задано %v (ТЗ §10.4: восстановление постепенное)", c.Schedule.RecoveryStep)
+	}
+	if c.Schedule.MinRateFactor <= 0 || c.Schedule.MinRateFactor >= 1 {
+		return nil, fmt.Errorf("config: schedule.min_rate_factor должен быть в (0, 1), задано %v (ТЗ §10.4)", c.Schedule.MinRateFactor)
+	}
+	for _, country := range c.Dashboard.Countries {
+		tz := c.Schedule.CountryTimezones[country]
+		if tz == "" {
+			return nil, fmt.Errorf("config: schedule.country_timezones не задан для %s (ТЗ §10.2: часовой пояс страны объявления)", country)
+		}
+		if _, err := time.LoadLocation(tz); err != nil {
+			return nil, fmt.Errorf("config: schedule.country_timezones.%s: неизвестный IANA-пояс %q: %w", country, tz, err)
+		}
 	}
 	return &c, nil
 }

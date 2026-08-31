@@ -138,11 +138,17 @@ func TestScanPipeline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("открытие БД: %v", err)
 	}
-	// t.Cleanup идёт LIFO: sweep зарегистрирован позже Close — значит,
-	// фикстуры удаляются пока пул жив, и только потом пул закрывается.
+	unlock, err := db.LiveTestLock(ctx, pool)
+	if err != nil {
+		t.Fatalf("live lock: %v", err)
+	}
+	// t.Cleanup идёт LIFO: unlock и sweep зарегистрированы позже
+	// Close — фикстуры удаляются пока пул жив, под локом, и только
+	// потом лок и пул закрываются.
 	// (t.Context() к моменту Cleanup отменён — чистим по фону; defer
 	// pool.Close() отменён: defer срабатывает ДО Cleanup.)
 	t.Cleanup(func() { pool.Close() })
+	t.Cleanup(unlock)
 	t.Cleanup(func() { sweepTestFixtures(t, context.Background(), pool) })
 
 	sweepTestFixtures(t, ctx, pool)
@@ -150,7 +156,7 @@ func TestScanPipeline(t *testing.T) {
 
 	runner := NewRunner(pool, map[string]config.DedupeParams{
 		"CZ": {RadiusM: 50, AreaTolerancePct: 10, AddressSimilarity: 0.9},
-	})
+	}, nil) // расписание (этап 11) здесь не проверяется
 	cfg1, err := LoadSearchConfig(ctx, pool, cfgID)
 	if err != nil {
 		t.Fatalf("load config: %v", err)

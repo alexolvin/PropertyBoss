@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"propertyboss/internal/db"
 )
 
 // Тесты зон против живой БД (тот же паттерн, что internal/scan):
@@ -30,9 +32,14 @@ func openTestPool(t *testing.T) *pgxpool.Pool {
 	if err != nil {
 		t.Fatalf("pool: %v", err)
 	}
-	// t.Cleanup идёт LIFO: sweep зарегистрирован позже Close — значит,
-	// работает до закрытия пула.
+	unlock, err := db.LiveTestLock(context.Background(), pool)
+	if err != nil {
+		t.Fatalf("live lock: %v", err)
+	}
+	// t.Cleanup идёт LIFO: unlock и sweep зарегистрированы позже
+	// Close — чистка работает под локом, лок отпущен последним.
 	t.Cleanup(func() { pool.Close() })
+	t.Cleanup(unlock)
 	t.Cleanup(func() { sweepTestZones(t, pool) })
 	return pool
 }

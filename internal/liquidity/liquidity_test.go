@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"propertyboss/internal/config"
+	"propertyboss/internal/db"
 )
 
 func TestObjIntervalsTargets(t *testing.T) {
@@ -277,7 +278,14 @@ func liqPool(t *testing.T) *pgxpool.Pool {
 	if err != nil {
 		t.Fatalf("pool: %v", err)
 	}
+	unlock, err := db.LiveTestLock(context.Background(), pool)
+	if err != nil {
+		t.Fatalf("live lock: %v", err)
+	}
+	// t.Cleanup идёт LIFO: тестовые сетыпы регистрируют cleanup ПОСЛЕ
+	// unlock — чистка работает под локом, лок отпущен последним.
 	t.Cleanup(pool.Close)
+	t.Cleanup(unlock)
 	return pool
 }
 

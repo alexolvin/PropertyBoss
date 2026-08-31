@@ -25,7 +25,7 @@ import (
 const (
 	delSrcID   = "pb-del-test"
 	delURLID   = "pb-del-url-test"
-	delCountry = "TT"
+	delCountry = "DD"
 	delBaseURL = "https://deltest.invalid/listing"
 )
 
@@ -51,17 +51,24 @@ func delOpen(t *testing.T) *pgxpool.Pool {
 	if err != nil {
 		t.Fatalf("открытие БД: %v", err)
 	}
-	// t.Cleanup идёт LIFO: sweep зарегистрирован позже Close — фикстуры
-	// удаляются, пока пул жив.
+	unlock, err := db.LiveTestLock(ctx, pool)
+	if err != nil {
+		t.Fatalf("live lock: %v", err)
+	}
+	// t.Cleanup идёт LIFO: unlock и sweep зарегистрированы позже
+	// Close — фикстуры удаляются, пока пул жив, под локом.
 	t.Cleanup(func() { pool.Close() })
+	t.Cleanup(unlock)
 	t.Cleanup(func() { delSweep(t, pool) })
 	delSweep(t, pool)
 	return pool
 }
 
-// delSetup — тестовый источник (страна TT) + активная конфигурация
-// поиска + n активных объектов без ссылок. Возвращает id конфигурации и
-// id объектов.
+// delSetup — тестовый источник (страна DD — песочница delist-тестов,
+// отдельно от 'TT' пакета zones: бинари пакетов go test гоняет
+// параллельно, общий country позволял cleanup одного стирать фикстуры
+// другого) + активная конфигурация поиска + n активных объектов без
+// ссылок. Возвращает id конфигурации и id объектов.
 func delSetup(t *testing.T, pool *pgxpool.Pool, srcID string, urlCheck bool, nObjects int) (cfgID int64, objIDs []int64) {
 	t.Helper()
 	ctx := t.Context()
@@ -358,7 +365,7 @@ func TestDelistReactivateOnReturn(t *testing.T) {
 	external := fmt.Sprintf("del-%d", x)
 	runner := NewRunner(pool, map[string]config.DedupeParams{
 		delCountry: {RadiusM: 50, AreaTolerancePct: 10, AddressSimilarity: 0.9},
-	})
+	}, nil) // расписание (этап 11) здесь не проверяется
 	rep := runner.Run(t.Context(), delSrcID, &fakeConn{
 		id:       delSrcID,
 		listings: []Listing{{ExternalID: external, URL: delBaseURL + "/" + external}},
