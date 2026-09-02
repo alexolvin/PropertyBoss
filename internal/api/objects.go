@@ -50,40 +50,60 @@ type hazardOut struct {
 	ComputedAt       *time.Time `json:"computed_at"`
 }
 
+// translationOut — сохранённый перевод (object_translations, этап 10,
+// ТЗ §11): UI читает из БД, без обращения к LLM. Строки без перевода
+// нет → поле null, UI показывает оригинал с пометкой «перевод недоступен».
+type translationOut struct {
+	Text         string    `json:"text"`
+	Model        string    `json:"model"`
+	TokenCost    *int      `json:"token_cost,omitempty"`
+	TranslatedAt time.Time `json:"translated_at"`
+}
+
 type objectOut struct {
-	ID             int64         `json:"id"`
-	Country        string        `json:"country"`
-	DealType       string        `json:"deal_type"`
-	ZoneID         *int64        `json:"zone_id"`
-	ZoneName       *string       `json:"zone_name,omitempty"`
-	ZoneLevel      *string       `json:"zone_level,omitempty"`
-	ZoneSource     *string       `json:"zone_source,omitempty"`
-	Address        *string       `json:"address"`
-	AreaSqM        *float64      `json:"area_sqm"`
-	Rooms          *int16        `json:"rooms"`
-	PropertyType   *string       `json:"property_type"`
-	PriceMinor     *int64        `json:"price_minor"`
-	Currency       *string       `json:"currency"`
-	PriceDisplay   *priceDisplay `json:"price_display,omitempty"`
-	Valuation      *valuationOut `json:"valuation,omitempty"`
-	Hazard         *hazardOut    `json:"hazard,omitempty"`
-	Status         string        `json:"status"`
-	DelistedReason *string       `json:"delisted_reason"`
-	FirstSeenAt    time.Time     `json:"first_seen_at"`
-	LastSeenAt     time.Time     `json:"last_seen_at"`
-	DelistedAt     *time.Time    `json:"delisted_at"`
+	ID                  int64           `json:"id"`
+	Country             string          `json:"country"`
+	DealType            string          `json:"deal_type"`
+	ZoneID              *int64          `json:"zone_id"`
+	ZoneName            *string         `json:"zone_name,omitempty"`
+	ZoneLevel           *string         `json:"zone_level,omitempty"`
+	ZoneSource          *string         `json:"zone_source,omitempty"`
+	Address             *string         `json:"address"`
+	AreaSqM             *float64        `json:"area_sqm"`
+	Rooms               *int16          `json:"rooms"`
+	PropertyType        *string         `json:"property_type"`
+	PriceMinor          *int64          `json:"price_minor"`
+	Currency            *string         `json:"currency"`
+	PriceDisplay        *priceDisplay   `json:"price_display,omitempty"`
+	DescriptionOriginal *string         `json:"description_original"`
+	LanguageOriginal    *string         `json:"language_original"`
+	TranslationRu       *translationOut `json:"translation_ru,omitempty"`
+	TranslationEn       *translationOut `json:"translation_en,omitempty"`
+	Valuation           *valuationOut   `json:"valuation,omitempty"`
+	Hazard              *hazardOut      `json:"hazard,omitempty"`
+	Status              string          `json:"status"`
+	DelistedReason      *string         `json:"delisted_reason"`
+	FirstSeenAt         time.Time       `json:"first_seen_at"`
+	LastSeenAt          time.Time       `json:"last_seen_at"`
+	DelistedAt          *time.Time      `json:"delisted_at"`
 }
 
 // objectsSelect/objectsFrom — с LEFT JOIN zones (имя/уровень/источник зоны
-// рядом с объектом, ТЗ §13) и LEFT JOIN LATERAL последней оценки
-// (ТЗ §7.3: отклонение всегда с интервалом и размерами выборки).
+// рядом с объектом, ТЗ §13), LEFT JOIN LATERAL последней оценки
+// (ТЗ §7.3: отклонение всегда с интервалом и размерами выборки) и
+// LEFT JOIN LATERAL сохранённых переводов ru/en (ТЗ §11: UI читает из БД).
+// Перевод показывается только свежий (source_hash = хеш ТЕКУЩЕГО
+// описания): устаревший перевод показывать как текущий — подстановка.
 // Квалификация objects.* обязательна: в zones те же имена колонок.
 const objectsSelect = `objects.id, objects.country, objects.deal_type, objects.zone_id, objects.address, objects.area_sqm, objects.rooms, objects.property_type,
 	objects.current_price_minor, objects.currency, objects.status, objects.delisted_reason, objects.first_seen_at, objects.last_seen_at, objects.delisted_at,
 	z.name AS zone_name, z.level AS zone_level, z.source AS zone_source,
 	v.model_version, v.price_deviation, v.deviation_null_reason, v.predicted_price_minor,
 	v.interval_low_minor, v.interval_high_minor, v.sample_size, v.r_squared, v.zone_fallback, v.computed_at,
-	h.horizon_days, h.hazard_probability, h.null_reason, h.model_version, h.events_in_training, h.computed_at`
+	h.horizon_days, h.hazard_probability, h.null_reason, h.model_version, h.events_in_training, h.computed_at,
+	objects.description_original, objects.language_original,
+	tr.text AS tr_text, tr.model AS tr_model, tr.token_cost AS tr_tokens, tr.translated_at AS tr_at,
+	te.text AS te_text, te.model AS te_model, te.token_cost AS te_tokens, te.translated_at AS te_at`
 
 const objectsFrom = ` FROM objects
 		LEFT JOIN zones z ON z.id = objects.zone_id
@@ -96,7 +116,17 @@ const objectsFrom = ` FROM objects
 			SELECT h2.* FROM liquidity_estimates h2 WHERE h2.object_id = objects.id
 			ORDER BY h2.computed_at DESC, h2.horizon_days DESC
 			LIMIT 1
-		) h ON true`
+		) h ON true
+		LEFT JOIN LATERAL (
+			SELECT t2.* FROM object_translations t2
+			WHERE t2.object_id = objects.id AND t2.lang = 'ru'
+			  AND t2.source_hash = encode(digest(objects.description_original, 'sha256'), 'hex')
+		) tr ON true
+		LEFT JOIN LATERAL (
+			SELECT t2.* FROM object_translations t2
+			WHERE t2.object_id = objects.id AND t2.lang = 'en'
+			  AND t2.source_hash = encode(digest(objects.description_original, 'sha256'), 'hex')
+		) te ON true`
 
 // attachValuation — подвешивает последнюю оценку, если она есть
 // (LEFT JOIN LATERAL → все v.* NULL, когда valuations пусто).
@@ -126,6 +156,22 @@ func attachHazard(o *objectOut, hz *hazardOut, size *int) {
 		hz.EventsInTraining = *size
 	}
 	o.Hazard = hz
+}
+
+// attachTranslation — сохранённый перевод языка lang, если строка есть
+// (LEFT JOIN LATERAL → все поля NULL без перевода). model и
+// translated_at в таблице NOT NULL, но приходят NULL без строки —
+// проверка по text (он же NOT NULL) достаточна.
+func attachTranslation(o *objectOut, lang string, text, model *string, tokens *int, at *time.Time) {
+	if text == nil || model == nil || at == nil {
+		return
+	}
+	t := &translationOut{Text: *text, Model: *model, TokenCost: tokens, TranslatedAt: *at}
+	if lang == "ru" {
+		o.TranslationRu = t
+	} else {
+		o.TranslationEn = t
+	}
 }
 
 // applyDisplay заполняет PriceDisplay суммой в displayTo по курсу на дату
@@ -225,18 +271,31 @@ func (s *Server) handleListObjects(w http.ResponseWriter, r *http.Request) {
 		var valFB *bool
 		var hz hazardOut
 		var hzSize *int
+		var (
+			trRuText, trRuModel *string
+			trRuTokens          *int
+			trRuAt              *time.Time
+			trEnText, trEnModel *string
+			trEnTokens          *int
+			trEnAt              *time.Time
+		)
 		if err := rows.Scan(&o.ID, &o.Country, &o.DealType, &o.ZoneID, &o.Address,
 			&o.AreaSqM, &o.Rooms, &o.PropertyType, &o.PriceMinor, &o.Currency,
 			&o.Status, &o.DelistedReason, &o.FirstSeenAt, &o.LastSeenAt, &o.DelistedAt,
 			&o.ZoneName, &o.ZoneLevel, &o.ZoneSource,
 			&val.ModelVersion, &val.PriceDeviation, &val.NullReason, &val.PredictedMinor,
 			&val.IntervalLowMinor, &val.IntervalHighMinor, &valSize, &val.RSquared, &valFB, &val.ComputedAt,
-			&hz.HorizonDays, &hz.Probability, &hz.NullReason, &hz.ModelVersion, &hzSize, &hz.ComputedAt); err != nil {
+			&hz.HorizonDays, &hz.Probability, &hz.NullReason, &hz.ModelVersion, &hzSize, &hz.ComputedAt,
+			&o.DescriptionOriginal, &o.LanguageOriginal,
+			&trRuText, &trRuModel, &trRuTokens, &trRuAt,
+			&trEnText, &trEnModel, &trEnTokens, &trEnAt); err != nil {
 			writeErr(w, err)
 			return
 		}
 		attachValuation(&o, &val, valSize, valFB)
 		attachHazard(&o, &hz, hzSize)
+		attachTranslation(&o, "ru", trRuText, trRuModel, trRuTokens, trRuAt)
+		attachTranslation(&o, "en", trEnText, trEnModel, trEnTokens, trEnAt)
 		if err := s.applyDisplay(ctx, &o, displayTo, conv); err != nil {
 			writeErr(w, err)
 			return
@@ -264,6 +323,14 @@ func (s *Server) handleGetObject(w http.ResponseWriter, r *http.Request) {
 	var valFB *bool
 	var hz hazardOut
 	var hzSize *int
+	var (
+		trRuText, trRuModel *string
+		trRuTokens          *int
+		trRuAt              *time.Time
+		trEnText, trEnModel *string
+		trEnTokens          *int
+		trEnAt              *time.Time
+	)
 	err = s.Pool.QueryRow(ctx, "SELECT "+objectsSelect+objectsFrom+" WHERE objects.id = $1", id).
 		Scan(&o.ID, &o.Country, &o.DealType, &o.ZoneID, &o.Address, &o.AreaSqM, &o.Rooms,
 			&o.PropertyType, &o.PriceMinor, &o.Currency, &o.Status, &o.DelistedReason,
@@ -271,13 +338,18 @@ func (s *Server) handleGetObject(w http.ResponseWriter, r *http.Request) {
 			&o.ZoneName, &o.ZoneLevel, &o.ZoneSource,
 			&val.ModelVersion, &val.PriceDeviation, &val.NullReason, &val.PredictedMinor,
 			&val.IntervalLowMinor, &val.IntervalHighMinor, &valSize, &val.RSquared, &valFB, &val.ComputedAt,
-			&hz.HorizonDays, &hz.Probability, &hz.NullReason, &hz.ModelVersion, &hzSize, &hz.ComputedAt)
+			&hz.HorizonDays, &hz.Probability, &hz.NullReason, &hz.ModelVersion, &hzSize, &hz.ComputedAt,
+			&o.DescriptionOriginal, &o.LanguageOriginal,
+			&trRuText, &trRuModel, &trRuTokens, &trRuAt,
+			&trEnText, &trEnModel, &trEnTokens, &trEnAt)
 	if err != nil {
 		writeErr(w, httpError(http.StatusNotFound, "объект %d не найден", id))
 		return
 	}
 	attachValuation(&o, &val, valSize, valFB)
 	attachHazard(&o, &hz, hzSize)
+	attachTranslation(&o, "ru", trRuText, trRuModel, trRuTokens, trRuAt)
+	attachTranslation(&o, "en", trEnText, trEnModel, trEnTokens, trEnAt)
 	var displayTo *money.Currency
 	var conv func(minor int64, from money.Currency, onDate time.Time) (int64, *fx.RateLookup, error)
 	if dc := r.URL.Query().Get("display_currency"); dc != "" {

@@ -38,7 +38,7 @@ go run ./cmd/pb serve
 ## Структура
 
 ```
-cmd/pb/               бинарь: migrate | fx sync | serve | scan | zones | valuate | liquidity | delist | schedule | notify
+cmd/pb/               бинарь: migrate | fx sync | serve | scan | zones | valuate | liquidity | delist | schedule | notify | translate
 internal/config/      YAML-конфиг с валидацией
 internal/db/          пул pgx + раннер миграций (schema_migrations)
 internal/money/       деньги: int64 в минорных единицах, конвертация через big.Rat (без float, ТЗ §5)
@@ -51,7 +51,8 @@ internal/valuation/   гедоническая модель ridge + правил
 internal/liquidity/   модель ликвидности: person-period, логистическая регрессия, калибровка (этап 7, ТЗ §9)
 internal/schedule/    адаптивное расписание: окна, веса, backoff, план (этап 11, ТЗ §10)
 internal/notify/      очередь уведомлений + Telegram-клиент, рендер, диск, снимок объекта (этап 8, ТЗ §2, §3.2)
-migrations/           SQL-миграции (0001…0021, схема ТЗ §12)
+internal/translate/   асинхронный переводчик описаний: LLM-клиент, детектор языка, идемпотентность по sha256 (этап 10, ТЗ §11)
+migrations/           SQL-миграции (0001…0022, схема ТЗ §12)
 config/               конфиги (config.yaml — в .gitignore)
 web/                  React + Vite + TS дашборд, i18n ru/en
 ```
@@ -77,7 +78,7 @@ web/                  React + Vite + TS дашборд, i18n ru/en
 | 7. Модель ликвидности | ✅ завершён ([отчёт](.handoff/stage7-report.md)) |
 | 8. Telegram-бот | ✅ завершён, доставка требует токена ([отчёт](.handoff/stage8-report.md)) |
 | 9. Phone-agent | не начат (нужен телефон) |
-| 10. Переводчик | не начат (нужен API-ключ LLM) |
+| 10. Переводчик | ✅ завершён, живые переводы требуют API-ключа ([отчёт](.handoff/stage10-report.md)) |
 | 11. Адаптивное расписание | ✅ завершён ([отчёт](.handoff/stage11-report.md)) |
 | 12. Подготовка vzu5-omi (phantom killer, termux-boot) | не начат |
 | 13. Перенос всей системы на vzu5-omi | не начат |

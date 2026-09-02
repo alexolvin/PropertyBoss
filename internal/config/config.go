@@ -29,7 +29,7 @@ type Config struct {
 	} `yaml:"fx"`
 
 	Dashboard struct {
-		Listen   string `yaml:"listen"`
+		Listen string `yaml:"listen"`
 		// Целевые рынки этапа 1 (источник: ТЗ §1)
 		Countries        []string          `yaml:"countries"`
 		MarketCurrencies map[string]string `yaml:"market_currencies"`
@@ -175,6 +175,32 @@ type Config struct {
 		// каждой страны из dashboard.countries.
 		CountryTimezones map[string]string `yaml:"country_timezones"`
 	} `yaml:"schedule"`
+
+	// Translate — асинхронный переводчик описаний (этап 10, ТЗ §11).
+	// Переводы ru/en хранятся в object_translations, чтение в UI — из БД,
+	// без обращения к LLM. Идемпотентность — по sha256(description_original).
+	// Асинхронность: перевод — отдельная cron-точка `pb translate run`,
+	// дедупликация/оценка/уведомления на неё не ждут.
+	Translate struct {
+		// API-ключ LLM (OpenAI-совместимый API). Пусто — переводчик не
+		// настроен: `pb translate run` возвращает явную ошибку, переводы
+		// не выполняются (ТЗ §0.4 — честная ошибка, не заглушка). Реальный
+		// ключ не коммитится (config.yaml в .gitignore).
+		APIKey string `yaml:"api_key"`
+		// Базовый URL OpenAI-совместимого API; по умолчанию
+		// https://api.openai.com/v1. Подменяется в тестах (mock-сервер).
+		BaseURL string `yaml:"base_url"`
+		// Название модели. ТЗ модель не предписывает — выбирает оператор
+		// (ТЗ §0.1: то, что должно быть значением конфига, не хардкодится).
+		Model string `yaml:"model"`
+		// Таймаут запроса к LLM, с.
+		TimeoutSec int `yaml:"timeout_sec"`
+		// Описание длиннее этого числа символов не отправляется в LLM
+		// (стоимость в токенах); перевод остаётся NULL, в UI — «перевод
+		// недоступен» (ТЗ §11). Допущение исполнителя: 4000 — типичная
+		// длина описания объявления с запасом.
+		MaxChars int `yaml:"max_chars"`
+	} `yaml:"translate"`
 }
 
 // DedupeParams — пороги сопоставления для одной страны.
@@ -348,6 +374,30 @@ func Load(path string) (*Config, error) {
 	}
 	if c.Notify.DiskRealertMinutes < 0 {
 		return nil, fmt.Errorf("config: notify.disk_realert_minutes должен быть >= 0, задано %d", c.Notify.DiskRealertMinutes)
+	}
+	// Translate (этап 10, ТЗ §11). Блок опциональный: без ключа переводчик
+	// не настроен — явная ошибка не на загрузке, а при `pb translate run`
+	// (ТЗ §0.4); нули — дефолты (паттерн notify.flush_limit).
+	if c.Translate.BaseURL == "" {
+		c.Translate.BaseURL = "https://api.openai.com/v1"
+	}
+	if u, err := url.Parse(c.Translate.BaseURL); err != nil ||
+		(u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return nil, fmt.Errorf("config: translate.base_url должен быть http(s) URL, задано %q", c.Translate.BaseURL)
+	}
+	if c.Translate.TimeoutSec <= 0 {
+		c.Translate.TimeoutSec = 60
+	}
+	if c.Translate.MaxChars <= 0 {
+		c.Translate.MaxChars = 4000
+	}
+	if c.Translate.MaxChars < 100 {
+		return nil, fmt.Errorf("config: translate.max_chars должен быть >= 100, задано %d (лимит длины описания для LLM, ТЗ §11)", c.Translate.MaxChars)
+	}
+	// Ключ без имени модели — конфиг, который не может работать;
+	// фиксируем на загрузке, а не в середине прогона.
+	if c.Translate.APIKey != "" && c.Translate.Model == "" {
+		return nil, fmt.Errorf("config: translate.model не задан, но translate.api_key задан (ТЗ §11)")
 	}
 	return &c, nil
 }

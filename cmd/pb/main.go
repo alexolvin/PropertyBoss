@@ -1,5 +1,5 @@
 // pb — бинарь PropertyBoss: миграции, курсы, API-сервер, сканер, зоны,
-// оценка, ликвидность, delisted, расписание, уведомления.
+// оценка, ликвидность, delisted, расписание, уведомления, переводы.
 package main
 
 import (
@@ -28,7 +28,11 @@ func main() {
 		usage()
 	}
 
-	// Путь к конфигу: --config | $PB_CONFIG | config/config.yaml
+	// Путь к конфигу: --config | $PB_CONFIG | config/config.yaml.
+	// Глобальный флаг — ДО субкоманды: Go flag не парсит флаги после
+	// первого позиционного аргумента, поэтому `pb <sub> --config` молча
+	// игнорировало путь (исправлено на этапе 10 — раньше работал только
+	// $PB_CONFIG).
 	cfgPath := flag.String("config", "", "путь к YAML-конфигу")
 	flag.Parse()
 	if *cfgPath == "" {
@@ -46,13 +50,18 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	switch os.Args[1] {
+	// Субкоманда — первый позиционный аргумент; после неё — только флаги
+	// этой субкоманды.
+	sub := flag.Arg(0)
+	subArgs := flag.Args()[1:]
+
+	switch sub {
 	case "migrate":
 		if err := runMigrate(ctx, cfg); err != nil {
 			log.Fatal(err)
 		}
 	case "fx":
-		if len(os.Args) < 3 || os.Args[2] != "sync" {
+		if len(subArgs) < 1 || subArgs[0] != "sync" {
 			usage()
 		}
 		if err := runFxSync(ctx, cfg); err != nil {
@@ -63,31 +72,35 @@ func main() {
 			log.Fatal(err)
 		}
 	case "scan":
-		if err := runScan(ctx, cfg, os.Args[2:]); err != nil {
+		if err := runScan(ctx, cfg, subArgs); err != nil {
 			log.Fatal(err)
 		}
 	case "zones":
-		if err := runZones(ctx, cfg, os.Args[2:]); err != nil {
+		if err := runZones(ctx, cfg, subArgs); err != nil {
 			log.Fatal(err)
 		}
 	case "valuate":
-		if err := runValuate(ctx, cfg, os.Args[2:]); err != nil {
+		if err := runValuate(ctx, cfg, subArgs); err != nil {
 			log.Fatal(err)
 		}
 	case "liquidity":
-		if err := runLiquidity(ctx, cfg, os.Args[2:]); err != nil {
+		if err := runLiquidity(ctx, cfg, subArgs); err != nil {
 			log.Fatal(err)
 		}
 	case "delist":
-		if err := runDelist(ctx, cfg, os.Args[2:]); err != nil {
+		if err := runDelist(ctx, cfg, subArgs); err != nil {
 			log.Fatal(err)
 		}
 	case "schedule":
-		if err := runSchedule(ctx, cfg, os.Args[2:]); err != nil {
+		if err := runSchedule(ctx, cfg, subArgs); err != nil {
 			log.Fatal(err)
 		}
 	case "notify":
-		if err := runNotify(ctx, cfg, os.Args[2:]); err != nil {
+		if err := runNotify(ctx, cfg, subArgs); err != nil {
+			log.Fatal(err)
+		}
+	case "translate":
+		if err := runTranslate(ctx, cfg, subArgs); err != nil {
 			log.Fatal(err)
 		}
 	default:
@@ -99,29 +112,33 @@ func usage() {
 	fmt.Fprintln(os.Stderr, `pb — PropertyBoss backend
 
 Использование:
-  pb migrate [--config PATH]   применить миграции
-  pb fx sync   [--config PATH] загрузить курсы ЕЦБ в fx_rates
-  pb serve     [--config PATH] API-сервер (этап 2)
-  pb scan -source ID -search-config ID [--config PATH]  прогон сканера (этап 3)
-  pb scan -list  [--config PATH]  зарегистрированные коннекторы
-  pb zones import -file PATH -country XX -source "NAME" [--config PATH]  полигоны зон (этап 4)
-  pb zones quotazioni -file PATH [-country IT] [--config PATH]  котировки зон (этап 4)
-  pb zones assign [--config PATH]  привязка объектов к зонам (этап 4)
-  pb zones link -country XX -level L [--config PATH]  parent_id по геометрии (этап 4)
-  pb zones list [-country XX] [-level L] [--config PATH]  просмотр зон (этап 4)
-  pb valuate [-country XX] [-deal-type T] [--config PATH]  гедоническая оценка (этап 5, ТЗ §7.2–7.3)
-  pb liquidity [-country XX] [-deal-type T] [--config PATH]  модель ликвидности (этап 7, ТЗ §9)
-  pb delist [-source ID] [--config PATH]  прогон маркировки delisted (этап 6, ТЗ §8.2)
-  pb schedule show [--config PATH]  состояние расписания: веса, warming_up, бюджет (этап 11, ТЗ §10)
-  pb schedule run [-dry] [--config PATH]  следующий скан по расписанию, cron-точка (этап 11, ТЗ §10)
-  pb schedule init-windows -source ID [-timezone TZ] [-dow 0-6] [-hours 0-24] [-max N]  окна сканирования (этап 11, ТЗ §10)
-  pb notify send [--limit N]   доставка pending-очереди в Telegram, cron-точка (этап 8, ТЗ §2, §3.4)
-  pb notify test               тестовое сообщение: токен/чат/сеть (этап 8)
-  pb notify object <id>        снимок объекта: оценка + вероятность ухода (этап 8)
-  pb notify check-disk         свободное место, алерт при пороге (этап 8, ТЗ §3.2)
-  pb notify status [--limit N] состояние очереди уведомлений (этап 8)
+  pb [--config PATH] <субкоманда> [флаги]
 
-Конфиг: --config | $PB_CONFIG | config/config.yaml`)
+  migrate               применить миграции
+  fx sync               загрузить курсы ЕЦБ в fx_rates
+  serve                 API-сервер (этап 2)
+  scan -source ID -search-config ID   прогон сканера (этап 3)
+  scan -list            зарегистрированные коннекторы
+  zones import -file PATH -country XX -source "NAME"   полигоны зон (этап 4)
+  zones quotazioni -file PATH [-country IT]   котировки зон (этап 4)
+  zones assign          привязка объектов к зонам (этап 4)
+  zones link -country XX -level L   parent_id по геометрии (этап 4)
+  zones list [-country XX] [-level L]   просмотр зон (этап 4)
+  valuate [-country XX] [-deal-type T]   гедоническая оценка (этап 5, ТЗ §7.2–7.3)
+  liquidity [-country XX] [-deal-type T]   модель ликвидности (этап 7, ТЗ §9)
+  delist [-source ID]    прогон маркировки delisted (этап 6, ТЗ §8.2)
+  schedule show         состояние расписания: веса, warming_up, бюджет (этап 11, ТЗ §10)
+  schedule run [-dry]   следующий скан по расписанию, cron-точка (этап 11, ТЗ §10)
+  schedule init-windows -source ID [-timezone TZ] [-dow 0-6] [-hours 0-24] [-max N]   окна сканирования (этап 11, ТЗ §10)
+  notify send [--limit N]   доставка pending-очереди в Telegram, cron-точка (этап 8, ТЗ §2, §3.4)
+  notify test               тестовое сообщение: токен/чат/сеть (этап 8)
+  notify object <id>        снимок объекта: оценка + вероятность ухода (этап 8)
+  notify check-disk         свободное место, алерт при пороге (этап 8, ТЗ §3.2)
+  notify status [--limit N] состояние очереди уведомлений (этап 8)
+  translate run [--limit N] [--country XX]   cron-точка: переводы ru/en описаний (этап 10, ТЗ §11)
+  translate status          состояние конвейера переводов (этап 10)
+
+Конфиг: --config PATH (глобальный флаг, ДО субкоманды) | $PB_CONFIG | config/config.yaml`)
 	os.Exit(2)
 }
 

@@ -330,3 +330,68 @@ func TestLoadNotifyValidation(t *testing.T) {
 		}
 	})
 }
+
+// Этап 10 (ТЗ §11): валидация блока translate. Блок опциональный (без
+// api_key переводчик просто не настроен — явная ошибка при `pb translate
+// run`, не на загрузке), но заданное некорректно — фиксация на загрузке.
+
+const translateBlockDefault = "translate:\n  api_key: \"sk-test\"\n  base_url: \"https://api.openai.com/v1\"\n  model: \"gpt-4o-mini\"\n  timeout_sec: 60\n  max_chars: 4000"
+
+func writeCfgTranslate(t *testing.T, block string) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "config.yaml")
+	out := cfgBase
+	if block != "" {
+		out += block
+	}
+	if err := os.WriteFile(p, []byte(out), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func TestLoadTranslateValidation(t *testing.T) {
+	cases := []struct {
+		name  string
+		block string
+		want  string // ожидаемый фрагмент ошибки; "" — ошибки нет
+	}{
+		{"valid", translateBlockDefault, ""},
+		// Блок отсутствует — переводчик не настроен, но конфиг валиден
+		// (дефолты применяются, явная ошибка — при `pb translate run`).
+		{"missing", "", ""},
+		{"no_key", "translate:\n  base_url: \"https://api.openai.com/v1\"\n  model: \"gpt-4o-mini\"", ""},
+		{"bad_base_url", "translate:\n  base_url: \"ftp://x\"\n  model: \"m\"", "translate.base_url"},
+		{"max_chars_99", "translate:\n  max_chars: 99", "translate.max_chars"},
+		{"key_no_model", "translate:\n  api_key: \"sk-test\"", "translate.model"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := Load(writeCfgTranslate(t, c.block))
+			if c.want == "" {
+				if err != nil {
+					t.Fatalf("Load: %v, ждали успех", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), c.want) {
+				t.Fatalf("Load: %v, ждали ошибку про %q", err, c.want)
+			}
+		})
+	}
+	t.Run("defaults", func(t *testing.T) {
+		cfg, err := Load(writeCfgTranslate(t, ""))
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		if cfg.Translate.BaseURL != "https://api.openai.com/v1" {
+			t.Errorf("base_url по умолчанию = %q", cfg.Translate.BaseURL)
+		}
+		if cfg.Translate.TimeoutSec != 60 {
+			t.Errorf("timeout_sec по умолчанию = %d, ждали 60", cfg.Translate.TimeoutSec)
+		}
+		if cfg.Translate.MaxChars != 4000 {
+			t.Errorf("max_chars по умолчанию = %d, ждали 4000", cfg.Translate.MaxChars)
+		}
+	})
+}
