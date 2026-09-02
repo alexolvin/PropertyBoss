@@ -304,8 +304,35 @@ func liqCfg(minEvents int, holdoutRatio float64) *config.Config {
 	return cfg
 }
 
+// liqNow — «сейчас» тестовых данных (опора liqDaysAgo). По умолчанию —
+// реальное время; обучающий тест фиксирует его (месяц признаков —
+// календарный, при относительных датах выборка зависела бы от даты
+// запуска — см. TestRunLiveTrainPredict).
+var liqNow = time.Now().UTC()
+
 func liqDaysAgo(n int) time.Time {
-	return time.Now().UTC().AddDate(0, 0, -n)
+	return liqNow.AddDate(0, 0, -n)
+}
+
+// liqTestNow — фиксированная дата обучающего сценария. Признак month —
+// календарный месяц начала интервала (ТЗ §9.2), поэтому при относительных
+// датах (liqDaysAgo) состав design-матрицы зависит от дня запуска, а
+// сходимость IRLS на недоопределённом синтетическом сценарии (8 событий на
+// ~30 параметров) — от состава (flake: на 6 из 8 проверенных дат 2026
+// фит сходится лишь на части дат). Фиксация даты делает тест
+// детерминированным: он проверяет механику разбиения/обучения/публикации,
+// а не капризы численного решателя. «Сейчас» продакшен-кода — реальное
+// время (nowUTC не трогается).
+var liqTestNow = time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+
+// pinLiqNow — фиксирует liqNow и nowUTC на liqTestNow на время теста
+// (восстановление в Cleanup).
+func pinLiqNow(t *testing.T) {
+	t.Helper()
+	oldNowUTC, oldLiqNow := nowUTC, liqNow
+	t.Cleanup(func() { nowUTC, liqNow = oldNowUTC, oldLiqNow })
+	nowUTC = func() time.Time { return liqTestNow }
+	liqNow = liqTestNow
 }
 
 // liqCleanup — регистрация LIFO-очистки ДО вставок: после всех
@@ -456,6 +483,7 @@ func TestRunLiveInsufficientHistory(t *testing.T) {
 func TestRunLiveTrainPredict(t *testing.T) {
 	pool := liqPool(t)
 	liqCleanup(t, pool)
+	pinLiqNow(t) // детерминированная дата сценария (см. liqTestNow)
 	ctx := context.Background()
 
 	// 10 завершённых: старт 70..88 дней назад, уход 14..42 дня

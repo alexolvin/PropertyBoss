@@ -31,6 +31,14 @@ const minTestIntervals = 20
 // Допущение исполнителя: 2.
 const minDeciles = 2
 
+// nowUTC — источник «сейчас» прогона: конец активных объектов, cutoff
+// временного разбиения, версия модели. Вынесен из time.Now() в
+// переменную — live-тест фиксирует дату: признак month_* — календарный
+// месяц начала интервала (ТЗ §9.2), и при относительных датах
+// тестовой выборки набор признаков зависел бы от даты запуска, а
+// сходимость IRLS — от него (flake, пойман 2026-09-02).
+var nowUTC = func() time.Time { return time.Now().UTC() }
+
 // estRow — строка liquidity_estimates в процессе записи.
 type estRow struct {
 	objectID int64
@@ -90,7 +98,7 @@ func Run(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, country, d
 		return nil, fmt.Errorf("liquidity: deal_type %q не в dashboard.deal_types", dealType)
 	}
 	q := &cfg.Liquidity
-	at := time.Now().UTC()
+	at := nowUTC()
 
 	rep := &RunReport{
 		Country: country, DealType: dealType,
