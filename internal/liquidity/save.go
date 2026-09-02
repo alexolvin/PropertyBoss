@@ -66,6 +66,54 @@ func saveModelRow(ctx context.Context, tx pgx.Tx, rep *RunReport, params map[str
 	return err
 }
 
+// enqueueModelNotice — уведомление оператора о ПУБЛИКАЦИИ модели:
+// переход в 'published' (первая публикация или выход из
+// uncalibrated/insufficient_history). ТЗ §9.4: пока модель не
+// откалибрована, «оповещения по ликвидности не отправляются» —
+// поэтому не публикуется ни одна строка, а повторный прогон уже
+// опубликованной модели не шлёт дубль (состояние не изменилось).
+// Payload — с размерами выборки и разреза Т (критерий этапа 8:
+// не голое число). Вызывается из Run внутри той же транзакции, что
+// и saveModelRow: уведомление и модель — атомарно (ТЗ §3.4).
+func enqueueModelNotice(ctx context.Context, tx pgx.Tx, rep *RunReport, prevStatus *string) error {
+	if rep.Status != "published" {
+		return nil
+	}
+	if prevStatus != nil && *prevStatus == "published" {
+		return nil
+	}
+	prev := "первый прогон"
+	if prevStatus != nil {
+		prev = *prevStatus
+	}
+	payload, err := json.Marshal(map[string]any{
+		"country":            rep.Country,
+		"deal_type":          rep.DealType,
+		"model_version":      rep.ModelVersion,
+		"horizon_days":       rep.HorizonDays,
+		"n_completed_events": rep.CompletedEvents,
+		"min_events":         rep.MinEvents,
+		"n_person_periods":   rep.NPeriods,
+		"n_params":           rep.Params,
+		"train_cutoff_at":    rep.TrainCutoff.Format(time.RFC3339),
+		"n_train":            rep.NTrain,
+		"n_test":             rep.NTest,
+		"c_index":            rep.CIndex,
+		"brier_score":        rep.Brier,
+		"max_calib_dev":      rep.MaxCalibDev,
+		"previous_status":    prev,
+	})
+	if err != nil {
+		return fmt.Errorf("liquidity: payload уведомления: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO notifications (channel, recipient, kind, payload)
+		VALUES ('telegram', 'operator', 'liquidity_model', $1)`, payload); err != nil {
+		return fmt.Errorf("liquidity: уведомление о публикации в очередь: %w", err)
+	}
+	return nil
+}
+
 // upsertEstimates — прогнозы пачками по 100. Таблица не историческая:
 // одна строка на (object, horizon), перезаписывается каждым прогоном.
 func upsertEstimates(ctx context.Context, tx pgx.Tx, rep *RunReport, at time.Time, ests []estRow) (int, error) {

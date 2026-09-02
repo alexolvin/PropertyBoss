@@ -6,6 +6,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"time"
 
@@ -110,6 +111,37 @@ type Config struct {
 		// случайное разбиение запрещено). Допущение исполнителя: 0.25.
 		HoldoutRatio float64 `yaml:"holdout_ratio"`
 	} `yaml:"liquidity"`
+
+	// Telegram — доставка уведомлений (этап 8, ТЗ §2). Бот — только
+	// уведомления, диалога нет. enabled=false — очередь notifications
+	// продолжает накапливаться, `pb notify send` явно сообщает, что
+	// доставка не настроена.
+	Telegram struct {
+		Enabled bool   `yaml:"enabled"`
+		Token   string `yaml:"token"`
+		ChatID  string `yaml:"chat_id"`
+		// Базовый URL Bot API; по умолчанию https://api.telegram.org.
+		// Подменяется в тестах (mock-сервер) — в конфиге это локальный
+		// адрес не нужен, но поле оставляем: зеркало API допустимо.
+		BaseURL string `yaml:"base_url"`
+	} `yaml:"telegram"`
+
+	// Notify — триггеры уведомлений (этап 8, ТЗ §3.2).
+	Notify struct {
+		// Сколько сообщений доставить за один `pb notify send`
+		// (cron-точка, ТЗ §3.4). 0 — разумный дефолт 100.
+		FlushLimit int `yaml:"flush_limit"`
+		// Каталог с данными для проверки свободного места (ТЗ §3.2);
+		// пусто — проверка отключена.
+		DiskPath string `yaml:"disk_path"`
+		// Свободного места меньше этого процента — алерт ДО критической
+		// точки (ТЗ §3.2), а не после. Должно быть в (0, 100).
+		DiskCriticalPct float64 `yaml:"disk_critical_pct"`
+		// Минимальный интервал между повторными алертами о диске, мин
+		// (состояние диска не меняется за минуты — повторный алерт
+		// чаще — шум). >= 0; 0 — алерт при каждом прогоне.
+		DiskRealertMinutes int `yaml:"disk_realert_minutes"`
+	} `yaml:"notify"`
 
 	// Schedule — адаптивное расписание сканирования (этап 11, ТЗ §10).
 	// ТЗ §0.1: все пороги/коэффициенты — в конфиге, не в коде.
@@ -293,6 +325,29 @@ func Load(path string) (*Config, error) {
 		if _, err := time.LoadLocation(tz); err != nil {
 			return nil, fmt.Errorf("config: schedule.country_timezones.%s: неизвестный IANA-пояс %q: %w", country, tz, err)
 		}
+	}
+	// Telegram (этап 8, ТЗ §2).
+	if c.Telegram.BaseURL == "" {
+		c.Telegram.BaseURL = "https://api.telegram.org"
+	}
+	if u, err := url.Parse(c.Telegram.BaseURL); err != nil ||
+		(u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return nil, fmt.Errorf("config: telegram.base_url должен быть http(s) URL, задано %q", c.Telegram.BaseURL)
+	}
+	if c.Telegram.Enabled {
+		if c.Telegram.Token == "" || c.Telegram.ChatID == "" {
+			return nil, fmt.Errorf("config: telegram.enabled=true, но не заданы telegram.token / telegram.chat_id (токен — у @BotFather)")
+		}
+	}
+	// Notify (этап 8, ТЗ §3.2).
+	if c.Notify.FlushLimit <= 0 {
+		c.Notify.FlushLimit = 100
+	}
+	if c.Notify.DiskCriticalPct <= 0 || c.Notify.DiskCriticalPct >= 100 {
+		return nil, fmt.Errorf("config: notify.disk_critical_pct должен быть в (0, 100), задано %v (ТЗ §3.2)", c.Notify.DiskCriticalPct)
+	}
+	if c.Notify.DiskRealertMinutes < 0 {
+		return nil, fmt.Errorf("config: notify.disk_realert_minutes должен быть >= 0, задано %d", c.Notify.DiskRealertMinutes)
 	}
 	return &c, nil
 }

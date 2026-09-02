@@ -54,6 +54,13 @@ schedule:
   min_rate_factor: 0.25
   country_timezones:
     CZ: Europe/Prague
+telegram:
+  enabled: false
+notify:
+  flush_limit: 100
+  disk_path: ""
+  disk_critical_pct: 10
+  disk_realert_minutes: 1440
 `
 
 const delistBlockDefault = "delist:\n  min_consecutive_misses: 2\n  max_delisted_share_pct: 25\n  url_check_timeout_sec: 10"
@@ -235,4 +242,91 @@ func valueOf(line string) string {
 		return line[i:]
 	}
 	return ""
+}
+
+// Этап 8 (ТЗ §2, §3.2): валидация блоков telegram и notify.
+
+const notifyBlockDefault = `notify:
+  flush_limit: 100
+  disk_path: ""
+  disk_critical_pct: 10
+  disk_realert_minutes: 1440`
+
+const telegramBlockDefault = "telegram:\n  enabled: false"
+
+func writeCfgNotify(t *testing.T, notifyBlock, telegramBlock string) string {
+	t.Helper()
+	out := strings.Replace(cfgBase, notifyBlockDefault, notifyBlock, 1)
+	if telegramBlock != "" {
+		out = strings.Replace(out, telegramBlockDefault, telegramBlock, 1)
+	}
+	p := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(p, []byte(out), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func TestLoadNotifyValidation(t *testing.T) {
+	telegramEnabledNoToken := "telegram:\n  enabled: true"
+	cases := []struct {
+		name          string
+		notifyBlock   string
+		telegramBlock string
+		want          string // ожидаемый фрагмент ошибки; "" — ошибки нет
+	}{
+		{"valid", notifyBlockDefault, "", ""},
+		{"flush_0_default", `notify:
+  flush_limit: 0
+  disk_path: ""
+  disk_critical_pct: 10
+  disk_realert_minutes: 1440`, "", ""},
+		{"crit_0", `notify:
+  flush_limit: 100
+  disk_path: ""
+  disk_critical_pct: 0
+  disk_realert_minutes: 1440`, "", "disk_critical_pct"},
+		{"crit_100", `notify:
+  flush_limit: 100
+  disk_path: ""
+  disk_critical_pct: 100
+  disk_realert_minutes: 1440`, "", "disk_critical_pct"},
+		{"realert_neg", `notify:
+  flush_limit: 100
+  disk_path: ""
+  disk_critical_pct: 10
+  disk_realert_minutes: -5`, "", "disk_realert_minutes"},
+		{"missing", "", "", "disk_critical_pct"},
+		{"telegram_no_token", notifyBlockDefault, telegramEnabledNoToken, "telegram.token"},
+		{"telegram_bad_url", notifyBlockDefault, "telegram:\n  enabled: false\n  base_url: \"ftp://x\"", "telegram.base_url"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := Load(writeCfgNotify(t, c.notifyBlock, c.telegramBlock))
+			if c.want != "" {
+				if err == nil || !strings.Contains(err.Error(), c.want) {
+					t.Fatalf("Load: %v, ждали ошибку про %q", err, c.want)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Load: %v, ждали успех", err)
+			}
+		})
+	}
+	t.Run("defaults", func(t *testing.T) {
+		cfg, err := Load(writeCfgNotify(t, `notify:
+  disk_path: ""
+  disk_critical_pct: 10
+  disk_realert_minutes: 0`, ""))
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		if cfg.Notify.FlushLimit != 100 {
+			t.Errorf("flush_limit по умолчанию = %d, ждали 100", cfg.Notify.FlushLimit)
+		}
+		if cfg.Telegram.BaseURL != "https://api.telegram.org" {
+			t.Errorf("base_url по умолчанию = %q", cfg.Telegram.BaseURL)
+		}
+	})
 }

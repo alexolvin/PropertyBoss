@@ -310,10 +310,16 @@ func liqDaysAgo(n int) time.Time {
 
 // liqCleanup — регистрация LIFO-очистки ДО вставок: после всех
 // вставок удаляет строки моделей, прогнозы и объекты страны.
+// Сразу же (под live-локом) чистит и остатки предыдущего
+// упавшего прогона — тесты идемпотентны.
 func liqCleanup(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
+	ctx := context.Background()
+	_, _ = pool.Exec(ctx, `DELETE FROM notifications
+		WHERE kind = 'liquidity_model' AND payload->>'country' = $1`, liqCountry)
 	t.Cleanup(func() {
-		ctx := context.Background()
+		_, _ = pool.Exec(ctx, `DELETE FROM notifications
+			WHERE kind = 'liquidity_model' AND payload->>'country' = $1`, liqCountry)
 		_, _ = pool.Exec(ctx, `DELETE FROM liquidity_models WHERE country = $1`, liqCountry)
 		_, _ = pool.Exec(ctx, `DELETE FROM liquidity_estimates
 			WHERE object_id IN (SELECT id FROM objects WHERE country = $1)`, liqCountry)
@@ -429,6 +435,19 @@ func TestRunLiveInsufficientHistory(t *testing.T) {
 		t.Fatalf("прогнозы: total=%d with_h=%d del=%d ins=%d (ждали 5/0/3/2)",
 			total, withHazard, delReason, insReason)
 	}
+
+	// ТЗ §9.4: «оповещения по ликвидности не отправляются», пока модель
+	// не откалибрована — строки в очереди нет вовсе.
+	var nNotes int
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*) FROM notifications
+		 WHERE kind = 'liquidity_model' AND payload->>'country' = $1`,
+		liqCountry).Scan(&nNotes); err != nil {
+		t.Fatalf("чтение очереди: %v", err)
+	}
+	if nNotes != 0 {
+		t.Errorf("insufficient_history: уведомлений %d, ждали 0", nNotes)
+	}
 }
 
 // ТЗ §9.2–9.4 end-to-end: временное разбиение (обучение до T),
@@ -520,5 +539,32 @@ func TestRunLiveTrainPredict(t *testing.T) {
 	if total != 40 || withH != 30 || nullH != 10 || delOK != 10 || activeBad != 0 {
 		t.Fatalf("прогнозы: total=%d with_h=%d null=%d del=%d bad_active=%d (ждали 40/30/10/10/0)",
 			total, withH, nullH, delOK, activeBad)
+	}
+
+	// ТЗ §9.4: публикация — ровно одно уведомление в очереди.
+	// (Дальше — только проверки БЕЗ model_version в WHERE: второй
+	// Run в ту же минуту даст строку с той же версией.)
+	var nNotes int
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*) FROM notifications
+		 WHERE kind = 'liquidity_model' AND payload->>'country' = $1`,
+		liqCountry).Scan(&nNotes); err != nil {
+		t.Fatalf("чтение очереди: %v", err)
+	}
+	if nNotes != 1 {
+		t.Fatalf("публикация: уведомлений %d, ждали 1", nNotes)
+	}
+	// Повторный прогон уже опубликованной модели — без дубля.
+	if _, err := Run(ctx, pool, liqCfg(2, 0.5), liqCountry, "sale"); err != nil {
+		t.Fatalf("второй Run: %v", err)
+	}
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*) FROM notifications
+		 WHERE kind = 'liquidity_model' AND payload->>'country' = $1`,
+		liqCountry).Scan(&nNotes); err != nil {
+		t.Fatalf("чтение очереди (2-й прогон): %v", err)
+	}
+	if nNotes != 1 {
+		t.Errorf("после 2-го прогона: уведомлений %d, ждали 1 (без дубля)", nNotes)
 	}
 }

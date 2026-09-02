@@ -1,4 +1,5 @@
-// pb — бинарь PropertyBoss: миграции, курсы, API-сервер, сканер, зоны.
+// pb — бинарь PropertyBoss: миграции, курсы, API-сервер, сканер, зоны,
+// оценка, ликвидность, delisted, расписание, уведомления.
 package main
 
 import (
@@ -85,6 +86,10 @@ func main() {
 		if err := runSchedule(ctx, cfg, os.Args[2:]); err != nil {
 			log.Fatal(err)
 		}
+	case "notify":
+		if err := runNotify(ctx, cfg, os.Args[2:]); err != nil {
+			log.Fatal(err)
+		}
 	default:
 		usage()
 	}
@@ -110,6 +115,11 @@ func usage() {
   pb schedule show [--config PATH]  состояние расписания: веса, warming_up, бюджет (этап 11, ТЗ §10)
   pb schedule run [-dry] [--config PATH]  следующий скан по расписанию, cron-точка (этап 11, ТЗ §10)
   pb schedule init-windows -source ID [-timezone TZ] [-dow 0-6] [-hours 0-24] [-max N]  окна сканирования (этап 11, ТЗ §10)
+  pb notify send [--limit N]   доставка pending-очереди в Telegram, cron-точка (этап 8, ТЗ §2, §3.4)
+  pb notify test               тестовое сообщение: токен/чат/сеть (этап 8)
+  pb notify object <id>        снимок объекта: оценка + вероятность ухода (этап 8)
+  pb notify check-disk         свободное место, алерт при пороге (этап 8, ТЗ §3.2)
+  pb notify status [--limit N] состояние очереди уведомлений (этап 8)
 
 Конфиг: --config | $PB_CONFIG | config/config.yaml`)
 	os.Exit(2)

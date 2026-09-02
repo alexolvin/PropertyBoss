@@ -10,6 +10,7 @@ package liquidity
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -318,9 +319,22 @@ func Run(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, country, d
 		ors.Close()
 	}
 
-	// Запись: строка истории модели + все прогнозы — одна транзакция
-	// (ТЗ §3.4).
+	// Запись: строка истории модели + все прогнозы + уведомление о
+	// публикации — одна транзакция (ТЗ §3.4).
+	var prevStatus *string
 	err = withTx(ctx, pool, func(tx pgx.Tx) error {
+		// Статус последней модели ДО строки текущего прогона:
+		// уведомление — только на переход в 'published' (ТЗ §9.4).
+		perr := tx.QueryRow(ctx, `
+			SELECT status FROM liquidity_models
+			WHERE country = $1 AND deal_type = $2
+			ORDER BY computed_at DESC, id DESC LIMIT 1`,
+			rep.Country, rep.DealType).Scan(&prevStatus)
+		if errors.Is(perr, pgx.ErrNoRows) {
+			prevStatus = nil
+		} else if perr != nil {
+			return fmt.Errorf("liquidity: статус последней модели: %w", perr)
+		}
 		if err := saveModelRow(ctx, tx, rep, params); err != nil {
 			return err
 		}
@@ -329,7 +343,7 @@ func Run(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, country, d
 			return err
 		}
 		rep.Wrote = n
-		return nil
+		return enqueueModelNotice(ctx, tx, rep, prevStatus)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("liquidity: запись результатов: %w", err)
