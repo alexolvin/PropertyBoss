@@ -12,7 +12,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -52,12 +54,61 @@ func (s *Server) Routes() http.Handler {
 	return mux
 }
 
+// Handler — API-маршруты + (если задан dashboard.ui) статическая раздача
+// собранного фронтенда тем же портом, что и API.
+func (s *Server) Handler() http.Handler {
+	h := s.Routes()
+	if dir := s.Cfg.Dashboard.UI; dir != "" {
+		h = withStatic(h, dir)
+	}
+	return h
+}
+
+// withStatic — дашборд на одном порту: пути, не начинающиеся с /api/,
+// — файлы каталога (web/dist); путь без файла — index.html (SPA-фолбэк
+// для клиентских маршрутов). Каталоги листингом не отдаются; каталог
+// без index.html — 404 для не-API путей.
+func withStatic(api http.Handler, dir string) http.Handler {
+	fsys := http.Dir(dir)
+	files := http.FileServer(fsys)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			api.ServeHTTP(w, r)
+			return
+		}
+		if r.URL.Path == "/api" || strings.HasPrefix(r.URL.Path, "/api/") {
+			api.ServeHTTP(w, r)
+			return
+		}
+		name := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
+		if name != "" {
+			if f, err := fsys.Open(name); err == nil {
+				fi, _ := f.Stat()
+				f.Close()
+				if fi != nil && !fi.IsDir() {
+					files.ServeHTTP(w, r)
+					return
+				}
+			}
+		}
+		// SPA-фолбэк: клиентский маршрут отдаёт оболочку приложения.
+		rr := *r
+		u := *r.URL
+		u.Path = "/"
+		rr.URL = &u
+		files.ServeHTTP(w, &rr)
+	})
+}
+
 // Serve запускает HTTP-сервер; блокируется до ctx.Done().
 func (s *Server) Serve(ctx context.Context, listen string) error {
 	srv := &http.Server{
 		Addr:              listen,
-		Handler:           s.Routes(),
+		Handler:           s.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
+	}
+	if s.Cfg.Dashboard.UI != "" {
+		log.Printf("api: UI (статическая раздача): %s", s.Cfg.Dashboard.UI)
 	}
 	errCh := make(chan error, 1)
 	go func() {

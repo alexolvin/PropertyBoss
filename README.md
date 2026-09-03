@@ -26,14 +26,25 @@ go run ./cmd/pb migrate
 # 3. Курсы ЕЦБ → fx_rates (окно backfill_days дней, идемпотентно)
 go run ./cmd/pb fx sync
 
-# 4. API-сервер дашборда (порт = dashboard.listen, по умолчанию 127.0.0.1:8090)
+# 4. Фронтенд дашборда: сборка (npm run build → web/dist)
+cd web && npm install && npm run build && cd ..
+
+# 5. Сервер дашборда: API + собранный UI на одном порту
+#    (dashboard.listen, по умолчанию 127.0.0.1:8090; UI — dashboard.ui)
 go run ./cmd/pb serve
 ```
 
-Порты: API-сервер — `dashboard.listen` из `config/config.yaml`
+Порты: сервер дашборда — `dashboard.listen` из `config/config.yaml`
 (по умолчанию **127.0.0.1:8090**; на `vzu5-claw` порт 8080 занят другим
-сервисом, проверено 2026-08-25). Dev-сервер фронтенда — Vite на 5173,
-проксирует `/api` на тот же порт backend (см. `web/vite.config.ts`).
+сервисом, проверено 2026-08-25). `pb serve` раздаёт собранный UI
+(`dashboard.ui`, каталог `web/dist`) тем же портом, что и API — один
+адрес на дашборд и JSON-API. Доступ с других нод (например, телефон
+через Tailscale): в `listen` указать IP tailnet (`tailscale ip -4`),
+**не 0.0.0.0** — у API нет аутентификации; адрес телефона —
+`http://<машина>.<tailnet>.ts.net:<порт>` (на `vzu5-claw` —
+`http://vzu5-claw.tail46a65f.ts.net:8090`). Dev-сервер фронтенда — Vite
+на 5173, проксирует `/api` на тот же порт backend (см.
+`web/vite.config.ts`).
 
 ## Структура
 

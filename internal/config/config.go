@@ -30,6 +30,9 @@ type Config struct {
 
 	Dashboard struct {
 		Listen string `yaml:"listen"`
+		// UI — каталог собранного фронтенда (npm run build → web/dist);
+		// pb serve раздаёт его тем же портом, что и API. Пусто — только API.
+		UI string `yaml:"ui"`
 		// Целевые рынки этапа 1 (источник: ТЗ §1)
 		Countries        []string          `yaml:"countries"`
 		MarketCurrencies map[string]string `yaml:"market_currencies"`
