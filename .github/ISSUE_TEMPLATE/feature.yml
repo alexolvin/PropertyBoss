@@ -1,0 +1,22 @@
+name: Feature request
+description: A change you want in PropertyBoss
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include secrets, personal data, access tokens, or private network addresses.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is missing, and who needs it.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+    validations:
+      required: true

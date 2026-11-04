@@ -1,0 +1,60 @@
+User-agent: *
+Disallow: /search.php
+Disallow: /*hledat=
+Disallow: /*hlokalita=
+Disallow: /*humkreis
+Disallow: /*order=
+Disallow: /*cenaod=
+Disallow: /*cenado=
+Disallow: /*rubriky=
+Disallow: /*type=
+Disallow: /*category=
+Disallow: /*idphone=
+Disallow: /*idmail=
+Disallow: /*IdTrans=
+Disallow: /hodnoceni.php
+Disallow: /hodnotit.php
+Disallow: /report.php
+Disallow: /report2.php
+Disallow: /doporucit.php
+Disallow: /suggest.php
+Disallow: /suggestpsc.php
+Disallow: /suggestpscinsert.php
+Disallow: /ad-phone.php
+Disallow: /ad-mail.php
+Disallow: /agent.php
+Disallow: /agentcancel.php
+Disallow: /obnovit.php
+Disallow: /doklad.php
+Disallow: /comgateok.php
+Disallow: /comgate2.php
+
+User-agent: Mediapartners-Google
+Disallow:
+
+User-agent: trovitBot
+Disallow: /
+
+User-agent: pricebot
+Disallow: /
+
+User-agent: magpie-crawler
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+User-Agent: trendictionbot
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+User-Agent: trendictionbot
+Disallow: /
+
+User-agent: BLEXBot
+Disallow: /
+
+User-agent: Riddler
+Disallow: /

@@ -1,0 +1,75 @@
+{
+  "success": true,
+  "extraData": {
+    "total": 3369,
+    "totalPages": 674,
+    "perPage": 5,
+    "currentPage": 1
+  },
+  "data": {
+    "offers": [
+      {
+        "id": 5673170,
+        "title": "Pronájem bytu 3+kk 66 m2",
+        "area": 66,
+        "disposition": "threePlusKk",
+        "geoCoordinates": {
+          "lat": 49.97713,
+          "lng": 14.35041
+        },
+        "rentalPrice": {
+          "value": 19900,
+          "currency": "CZK"
+        },
+        "absoluteUrl": "https://www.ulovdomov.cz/inzerat/pronajem-praha-radotin-karlicka-3-kk/5673170",
+        "offerType": "rent",
+        "propertyType": "flat",
+        "published": "2026-09-07T05:00:06",
+        "street": {
+          "id": 99771,
+          "title": "Karlická"
+        },
+        "village": {
+          "id": 6253,
+          "title": "Praha"
+        },
+        "villagePart": {
+          "id": 15078,
+          "title": "Radotín"
+        },
+        "description": "Nabízíme podkrovní byt 3+kk s prostorným balkonem a možností využití zahrady v rodinném domě na Praze 5. Byt disponuje t"
+      },
+      {
+        "id": 5670202,
+        "title": "Pronájem bytu 2+1 78 m2",
+        "area": 78,
+        "disposition": "twoPlusOne",
+        "geoCoordinates": {
+          "lat": 49.20317,
+          "lng": 16.61856
+        },
+        "rentalPrice": {
+          "value": 23900,
+          "currency": "CZK"
+        },
+        "absoluteUrl": "https://www.ulovdomov.cz/inzerat/pronajem-brno-cerna-pole-cernopolni-2-1/5670202",
+        "offerType": "rent",
+        "propertyType": "flat",
+        "published": "2026-07-13T18:47:02",
+        "street": {
+          "id": 7037,
+          "title": "Černopolní"
+        },
+        "village": {
+          "id": 347,
+          "title": "Brno"
+        },
+        "villagePart": {
+          "id": 846,
+          "title": "Černá Pole"
+        },
+        "description": "V zastoupení majitele nabízíme k pronájmu prostorný a světlý byt o dispozici 2+1 a celkové výměře cca 78 m², který se na"
+      }
+    ]
+  }
+}

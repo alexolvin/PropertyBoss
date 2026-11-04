@@ -1,0 +1,1029 @@
+/* TZ_UI v3: phone-first, один шрифт, плоские записи (тонкие линии,
+   без теней/скругления), единственный акцент — цвет ценового
+   отклонения (ТЗ §8). Палитра утверждена макетами Этапа 2; тема
+   следует системной (ТЗ §13.4).
+   TZ UI v5 U05: две явные палитры вместо light-dark() — light-dark()
+   валидна с Safari 18.2; на iOS 16/17 и WebView < 123 каждое
+   объявление невалидно, переменные падают в initial и поверхности
+   исчезают. Светлая — базовая в :root, тёмная — prefers-color-scheme. */
+
+:root {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color-scheme: light dark;
+  /* 2.75rem = 44px — минимальная зона касания (ТЗ §10) */
+  --touch: 2.75rem;
+
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --text: #171a20;
+  /* Контраст второстепенного текста повышен к уровню, читаемому на солнце
+     (критика Этапа 5): светлая тема — темнее, тёмная — светлее; приглушённый
+     цвет — нейтральный, без сине-серого оттенка */
+  --muted: #5c6470;
+  --line: #dcdee3;
+  /* Единственный акцент: ценовое отклонение. Отрицательное — дешевле
+     рынка (зелёный), положительное — дороже (красный). Контраст AA
+     проверен для обеих тем (ТЗ §8, §10). */
+  --accent: #177245;
+  --accent-hi: #b42318;
+  --danger: #b42318;
+}
+
+/* Тёмная палитра (TZ UI v5 U05): та же структура, значения тёмной темы. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1114;
+    --surface: #16191e;
+    --text: #e7e9ed;
+    --muted: #9aa1ad;
+    --line: #2d3644;
+    --accent: #4cc38a;
+    --accent-hi: #ff8f80;
+    --danger: #ff8f80;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Числа — табличные цифры: колонки цен и отклонений не «плывут» (ТЗ §3) */
+.num { font-variant-numeric: tabular-nums; }
+
+main {
+  max-width: 30rem;
+  margin: 0 auto;
+  /* TZ UI v5 U11: контейнер для @container-запросов — ширина колонки,
+     а не вьюпорта (pager переключает подписи по ширине контейнера) */
+  container-type: inline-size;
+  padding: 0 1rem;
+  /* Отверде под нижнюю панель (46px) + жестовая полоса iOS */
+  padding-bottom: calc(46px + 1rem + env(safe-area-inset-bottom));
+  /* TZ UI v5 U06: dvh — высота фактического видимого поля; вторая строка
+     переопределяет там, где поддерживается (Safari 15.4+), остальное
+     остаётся на 100vh */
+  min-height: 100vh;
+  min-height: 100dvh;
+  /* flex-колонка: пустое состояние растягивается на всю оставшуюся
+     высоту и центрируется, а не висит в верхней трети (критика Этапа 5) */
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- Нижняя панель разделов: текст, без иконок (макет Этапа 2, §8).
+      Активная — жирный + 2px-линия сверху в цвете текста --- */
+.tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  display: flex;
+  background: var(--bg);
+  border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.tabbar a {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  padding: 8px 0;
+  font-size: 0.8125rem;
+  color: var(--muted);
+  text-decoration: none;
+  border-top: 2px solid transparent;
+  margin-top: -1px;
+  touch-action: manipulation;
+}
+.tabbar a.active {
+  color: var(--text);
+  font-weight: 600;
+  border-top-color: var(--text);
+}
+
+/* --- Список объектов (§6.2) --- */
+.list-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0 10px;
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 5;
+}
+/* Счётчик — мельче цены в строках: крупнейшим жирным числом на экране
+   должны быть данные, а не агрегат (критика Этапа 5) */
+.count { font-size: 0.875rem; color: var(--muted); }
+.count b { color: var(--text); font-weight: 600; }
+/* TZ UI v5 U10: актуальность «данные на HH:MM» — второстепенная строка
+   под счётчиком, не отдельный элемент шапки */
+.asof { display: block; font-size: 0.8125rem; color: var(--muted); }
+.top-actions { display: flex; gap: 8px; }
+/* TZ UI v5 U10: кнопки шапки («Обновить», «Фильтры») — один стиль */
+.top-btn {
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 14px;
+  min-height: var(--touch);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+/* U15: при узком вьюпорте блок счётчика (число + asof = 2 строки ≈ 39 px)
+   должен помещаться в высоту кнопок (44 px): тогда высота шапки одинакова
+   до и после загрузки данных и список не сдвигается (CLS = 0). Кнопки
+   компактнее (padding + шрифт 12 px), asof мельче → счётчику хватает
+   ширины: при 320 px «данные на HH:MM» (≈ 106 px) и «N объектов»
+   (живой корпус: «10 530 объектов» ≈ 127 px при 14 px) влезает в одну
+   строку без обрезки (E9-проверка U16). nowrap+ellipsis — страховка от
+   переноса при экстремальных total (перенос = рост шапки = CLS). */
+@media (max-width: 350px) {
+  .top-btn { padding: 0 8px; font-size: 0.75rem; }
+  .count { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .asof { font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; }
+}
+
+/* D24: «Обновить» — ощутимое рабочее состояние, пока запрос в полёте
+   (метка HH:MM внутри минуты не меняется, клик выглядел мёртвым) */
+@keyframes spin { to { transform: rotate(360deg); } }
+.top-btn[aria-busy="true"] { opacity: 0.7; }
+.refresh-btn[aria-busy="true"]::before {
+  content: "";
+  display: inline-block;
+  width: 0.62em;
+  height: 0.62em;
+  margin-right: 6px;
+  vertical-align: -0.06em;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* Запись списка (TZ_UI v5 U15/U16): обложка + основная колонка.
+   Вся строка — одна ссылка, hit-area ≥ 44px; обложка — треть ширины,
+   aspect-ratio 4/3 держит CLS=0; бейдж состояния — на обложке. */
+.object-list { list-style: none; margin: 0; padding: 0; }
+.row {
+  display: flex;
+  gap: 12px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--line);
+  color: inherit;
+  text-decoration: none;
+  touch-action: manipulation;
+}
+.row-cover {
+  position: relative;
+  flex: 0 0 33%;
+  max-width: 132px;
+  /* align-self: center — иначе flex-stretch (align-items: stretch)
+     тянет высоту до высоты строки, и aspect-ratio 4/3 не держится
+     (CLS=0: размер задаёт aspect-ratio, не содержимое) */
+  align-self: center;
+  aspect-ratio: 4 / 3;
+  border-radius: 6px;
+  background: var(--line);
+  overflow: hidden;
+}
+.cover-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cover-ph { position: absolute; inset: 0; }
+.cover-badge {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  max-width: calc(100% - 12px);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--bg);
+  background: var(--text);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+.row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.row-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.dev-wrap { display: flex; flex-direction: column; min-width: 0; }
+.row-price { display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0; }
+.row-facts { font-size: 0.8125rem; color: var(--muted); margin-top: 6px; }
+/* Адрес — до двух строк (U16): площадь/комнаты своей строкой, поэтому
+   в адресе их терять обрезкой нечего (E9 закрыт) */
+.addr {
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.3;
+  margin-top: 2px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.row-seller { font-size: 0.8125rem; color: var(--muted); margin-top: 4px; }
+/* Отклонение — главный элемент (U16): число 1.5rem + компактный признак
+   достоверности; без числа — текст причины обычным. */
+.dev { font-size: 0.875rem; color: var(--muted); min-height: 1.3rem; }
+.dev.num { font-size: 1.5rem; font-weight: 700; line-height: 1.1; }
+.dev.neg { color: var(--accent); }
+.dev.pos { color: var(--accent-hi); }
+/* Компактный признак достоверности (§7.2): выборка числом; замещение
+   зоны — видимым текстом (U20) и цветовой пометкой */
+.dev-meta-list { font-size: 0.8125rem; color: var(--muted); margin-top: 2px; }
+.dev-meta-list.fallback { color: var(--accent-hi); font-weight: 600; }
+.price { font-size: 1rem; font-weight: 600; white-space: nowrap; }
+.price.empty { color: var(--muted); font-weight: 400; }
+
+/* --- Пустой результат фильтра (§7.3: текст причины, не пустая область) --- */
+.empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px 32px;
+  min-height: 40vh;
+  min-height: 40dvh; /* TZ UI v5 U06: центрирование по фактическому полю */
+}
+.empty h2 { font-size: 1.125rem; font-weight: 600; margin: 0 0 6px; }
+.empty p { font-size: 0.9375rem; color: var(--muted); margin: 0 0 20px; max-width: 22ch; }
+/* Действие на пустом экране — первичное (заполненное): «Сбросить фильтры»
+   разрушает состояние, «Фильтры» в шапке — только открывает; они не должны
+   выглядеть одинаково (критика Этапа 5) */
+.reset-btn {
+  font: inherit;
+  font-size: 1rem;
+  color: var(--bg);
+  background: var(--text);
+  border: 1px solid var(--text);
+  border-radius: 10px;
+  padding: 10px 20px;
+  min-height: var(--touch);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* --- Пагинация: статичная, без липкости (ТЗ v3 §2.8) --- */
+.pager {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  font-size: 0.9375rem;
+}
+.pager button {
+  font: inherit;
+  font-size: 0.9375rem;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  min-width: var(--touch);
+  min-height: var(--touch);
+  padding: 6px 14px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.pager button:disabled { opacity: 0.4; cursor: default; }
+.pager .page-of { font-size: 0.875rem; color: var(--muted); white-space: nowrap; }
+/* TZ UI v5 U11: поле номера — 3.5rem (было 4.75rem): на 320 px pager
+   обязан умещаться в одну строку */
+.pager-input { width: 3.5rem; text-align: center; }
+/* TZ UI v5 U11: контейнер уже 400 px — стрелки ‹ › (aria-label на
+   кнопке не меняется); шире — полные подписи. Запрос к ширине
+   КОНТЕЙНЕРА (main), не вьюпорта. */
+.pager .pager-arrow { display: none; }
+@container (max-width: 399.98px) {
+  .pager .pager-word { display: none; }
+  .pager .pager-arrow { display: inline; }
+  .pager button { padding: 6px 10px; }
+}
+
+/* --- Лист фильтров (нижний, §6.2) --- */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 50;
+}
+.sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 51;
+  max-width: 30rem;
+  margin: 0 auto;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+}
+/* Видимого заголовка в шторке нет: кнопка «Фильтры» прямо над ней уже
+   называет содержимое (критика Этапа 5); имя для ассистивных технологий
+   даёт aria-label на div.dialog */
+.sheet .field { margin-bottom: 12px; }
+.sheet .field label {
+  display: block;
+  font-size: 0.875rem;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.sheet .live-count { font-size: 0.875rem; color: var(--muted); margin: 0 0 12px; }
+/* Число превью — основная часть строки: ответ на «сколько останется» */
+.sheet .live-count b { color: var(--text); font-weight: 600; }
+.sheet-actions { display: flex; gap: 12px; margin-top: 16px; }
+.sheet-actions button {
+  flex: 1;
+  font: inherit;
+  font-size: 1rem;
+  min-height: var(--touch);
+  border-radius: 10px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-primary { background: var(--text); color: var(--bg); border: 1px solid var(--text); }
+.btn-ghost { background: var(--surface); color: var(--text); border: 1px solid var(--line); }
+/* «Сбросить» в шторке — текстовая кнопка без рамки: не должна выглядеть
+   как третий select рядом с двумя настоящими (критика Этапа 5) */
+.sheet-actions .btn-ghost { background: transparent; border-color: transparent; }
+
+/* --- Экран объекта (§6.3): блоки отступами и тонкими линиями --- */
+.obj-head { padding: 16px 0 4px; }
+.obj-addr { font-size: 1.125rem; font-weight: 600; line-height: 1.3; margin: 0; }
+.obj-sub { font-size: 0.875rem; color: var(--muted); margin-top: 2px; }
+
+.block { padding: 16px 0; border-bottom: 1px solid var(--line); }
+.block:last-child { border-bottom: 0; }
+.block h2 { font-size: 0.9375rem; font-weight: 600; margin: 0 0 8px; }
+
+/* «поле — значение». TZ UI v5 U13: minmax(0, max-content) — длинная
+   метка не вытесняет значение: колонка метки сжимается до 0, текст
+   переносится, число остаётся на месте */
+.kv {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) 1fr;
+  gap: 4px 16px;
+  font-size: 0.9375rem;
+  margin: 0;
+}
+/* TZ UI v5 U13: длинная метка блока качества — лейбл над значением,
+   а не в колонку (метка «R² (…) — Чехия — продажа» не отнимает больше
+   половины ширины на 360 px) */
+.kv.stack dt { grid-column: 1 / -1; }
+.kv.stack dd { grid-column: 1 / -1; text-align: left; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; text-align: right; font-weight: 500; overflow-wrap: anywhere; }
+/* «Нет данных» — не подтверждённое значение: приглушённый цвет и обычный
+   вес отличают его от настоящего значения в том же ряду (критика Этапа 5) */
+.kv dd.empty { color: var(--muted); font-weight: 400; }
+.kv a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch);
+}
+
+/* Оценка: состояние — крупно, причина — текстом (§7.3) */
+.dev-state { font-size: 1.5rem; font-weight: 700; line-height: 1.15; }
+.dev-state.small { font-size: 1.125rem; }
+.dev-reason { font-size: 0.9375rem; color: var(--muted); margin-top: 4px; }
+.dev-meta { font-size: 0.8125rem; color: var(--muted); margin-top: 10px; }
+
+/* Цена + цена/м² + история (§6.3.2; TZ_UI v5 U18) */
+.price-now { font-size: 1.5rem; font-weight: 700; }
+.price-sqm { font-size: 0.9375rem; color: var(--muted); margin: 4px 0 0; white-space: nowrap; }
+.hist { margin-top: 10px; display: flex; flex-direction: column; gap: 2px; }
+.hist-row { display: flex; justify-content: space-between; font-size: 0.875rem; color: var(--muted); }
+.hist-row .num { color: var(--text); }
+.hist-delta { margin-top: 6px; font-size: 0.875rem; color: var(--muted); }
+.hist-delta b { color: var(--text); font-weight: 600; }
+
+/* Характеристики: D1 — отсутствующие атрибуты одной строкой
+   «Не указано: …», не «нет данных» в каждой строке */
+.not-specified { font-size: 0.9375rem; color: var(--muted); margin: 0; }
+.seller-line { margin: 0; font-size: 1rem; overflow-wrap: anywhere; }
+
+/* --- Фото (TZ_UI v5 U17): фид — первый блок; листание по одному
+   (scroll-snap); тап — полноэкранный просмотр на примитиве U07 --- */
+.photo-feed {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory;
+  padding-bottom: 2px;
+}
+.photo {
+  flex: 0 0 78%;
+  max-width: 340px;
+  scroll-snap-align: start;
+  padding: 0;
+  border: 0;
+  background: var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.photo img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; }
+.photo-count { font-size: 0.8125rem; color: var(--muted); margin: 8px 0 0; text-align: right; }
+/* Полноэкранный: фон — весь экран, фото — contain по центру; закрытие —
+   кнопка, Escape (U07), тап по фону (letterbox); листание — свайп */
+.viewer { position: fixed; inset: 0; z-index: 60; background: var(--bg); }
+.viewer-root { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.viewer-feed {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory;
+}
+.viewer-slide {
+  flex: 0 0 100%;
+  scroll-snap-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: 0;
+}
+.viewer-slide img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.viewer-close {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--bg);
+  background: var(--text);
+  border: 0;
+  border-radius: 0 0 0 10px;
+  min-width: var(--touch);
+  min-height: var(--touch);
+  padding: 0 16px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.viewer-count {
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--muted);
+  padding: 12px 0 calc(12px + env(safe-area-inset-bottom));
+}
+
+/* Кнопка-ссылка на площадку (§6.3.6): крупная, без стрелки (§8) */
+.link-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  font-size: 1rem;
+  color: var(--text);
+  text-decoration: none;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 16px;
+  min-height: var(--touch);
+  touch-action: manipulation;
+}
+.link-btn .dom { display: block; font-size: 0.8125rem; color: var(--muted); margin-top: 2px; }
+
+/* Служебные сведения — единственное постепенное раскрытие экрана (§6.3.7) */
+details.service { font-size: 0.9375rem; }
+details.service summary {
+  cursor: pointer;
+  min-height: var(--touch);
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  list-style: none;
+}
+details.service summary::-webkit-details-marker { display: none; }
+details.service[open] summary { margin-bottom: 8px; }
+
+/* --- Раздел «Модели» (§6.5) --- */
+.head { padding: 16px 0 4px; }
+.head h1 { font-size: 1.125rem; font-weight: 600; margin: 0; }
+.head p { font-size: 0.875rem; color: var(--muted); margin: 4px 0 0; max-width: 34ch; }
+/* Вердикт о состоянии системы — первый элемент экрана «Модели»,
+   основным цветом и крупнее второстепенного текста (критика Этапа 5) */
+.status-line { font-size: 1.0625rem; color: var(--text); margin: 8px 0 0; max-width: none; }
+.status-scan { font-size: 0.875rem; color: var(--muted); margin: 4px 0 0; }
+.note { font-size: 0.9375rem; color: var(--muted); margin: 0; }
+
+.pair { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.pair:last-child { border-bottom: 0; }
+.pair-name { font-size: 0.9375rem; font-weight: 600; }
+.pair-st { font-size: 0.875rem; color: var(--muted); margin-top: 2px; }
+.pair-st b { color: var(--text); font-weight: 600; }
+/* Пара без объектов — приглушённая: это состояние, а не данные
+   (критика Этапа 5) */
+.pair.empty .pair-name { font-size: 0.875rem; font-weight: 500; color: var(--muted); }
+.pair.empty p { font-size: 0.8125rem; margin: 4px 0 0; }
+/* Два статуса моделей в паре — две подписанные строки: подпись основным
+   цветом, значение обычным весом (критика Этапа 5) */
+.model-line { font-size: 0.9375rem; margin: 0; }
+.model-line .model-label { color: var(--text); font-weight: 500; }
+
+/* --- Раздел «Настройки»: блоки, как на экране объекта --- */
+.settings-block { padding: 16px 0; border-bottom: 1px solid var(--line); }
+.settings-block:last-child { border-bottom: 0; }
+.settings-block > h2 { font-size: 0.9375rem; font-weight: 600; margin: 0 0 12px; }
+/* Строка «Оформления»: подпись сверху, селект снизу (критика Этапа 5) */
+.pref-row { margin-bottom: 12px; }
+.pref-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+/* Поиск по зонам: результаты — плоский список, как список объектов */
+.zone-result { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.zone-result:last-child { border-bottom: 0; }
+.zone-name { font-size: 0.9375rem; font-weight: 600; overflow-wrap: anywhere; }
+.zone-meta { font-size: 0.8125rem; color: var(--muted); margin-top: 2px; overflow-wrap: anywhere; }
+
+/* --- Кнопки (общие; все >= 44px, §10) --- */
+button {
+  font: inherit;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+button:disabled { opacity: 0.5; cursor: default; }
+button.primary {
+  background: var(--text);
+  color: var(--bg);
+  border: 1px solid var(--text);
+  border-radius: 10px;
+  padding: 10px 18px;
+  min-height: var(--touch);
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+button.ghost {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 14px;
+  min-height: var(--touch);
+  font-size: 0.9375rem;
+  cursor: pointer;
+}
+button.ghost.danger { color: var(--danger); border-color: var(--danger); }
+
+/* Видимый фокус с клавиатуры (§10) */
+button:focus-visible,
+a:focus-visible,
+summary:focus-visible,
+input:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+/* --- Поля ввода: 16px — иначе iOS автозум при фокусе (§10) --- */
+input, select {
+  font: inherit;
+  font-size: 1rem;
+  min-height: var(--touch);
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: inherit;
+  width: 100%;
+}
+input::placeholder { color: var(--muted); }
+input[type='checkbox'] { width: auto; min-height: 0; }
+
+label.checkbox {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--touch);
+  cursor: pointer;
+  font-size: 1rem;
+  color: var(--text);
+  width: auto;
+}
+label.checkbox input {
+  width: 1.25rem;
+  height: 1.25rem;
+  min-height: 0;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+/* --- Формы (конфигурации поиска, переиспользуются в «Настройках») --- */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+  gap: 12px 16px;
+  margin: 12px 0;
+}
+.form-grid label:not(.checkbox) {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+.form-grid input, .form-grid select { width: 100%; }
+
+.form-actions { display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+.form-actions button { flex: 1; }
+
+.toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+.toolbar select { flex: 1; min-width: 10rem; }
+.toolbar .muted { flex-basis: 100%; margin: 0; }
+
+/* Карточка конфигурации (плоская, как записи списка) */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.card h3 { margin: 0 0 4px; font-size: 1.0625rem; font-weight: 600; }
+.card h4 { margin: 16px 0 0; font-size: 1rem; font-weight: 600; }
+.card .kv { margin: 10px 0 0; }
+
+.list { display: grid; gap: 12px; }
+.item { padding: 14px 16px; }
+.item-title { margin: 0; font-size: 1rem; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+/* TZ_UI v5 U23: подзаголовок карточки — структурированными строками
+   (цена / источник / обновлена), не строкой через запятую */
+.item-sub {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* U23: фильтр — по одному на строку (подпись из реестра страны) */
+.filter-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+/* TZ_UI v5 U22: сохранённая запись подсвечивается коротко (ТЗ v4 §7.1) */
+@keyframes item-highlight { 0% { background: var(--line); } 100% { background: transparent; } }
+.item.highlight { animation: item-highlight 2s ease-out; }
+/* Результат сохранения — статус-строка (role="status"), не toast */
+.form-note { font-size: 0.875rem; color: var(--muted); margin: 8px 0; }
+/* Статус — в строке с заголовком («метка у заголовка», критика Этапа 5);
+   подзаголовок — под ней во всю ширину, не суженный чипом: карточка
+   короче, и поле поиска зон остаётся в первом экране 390×844
+   (Этап 4, задача 7) */
+.cfg-head { display: flex; flex-direction: column; }
+.cfg-title { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-width: 0; }
+.cfg-title .item-title { min-width: 0; }
+.cfg-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+.cfg-actions button { flex: 1; }
+
+/* --- TZ_UI v5 U22: правка конфигураций — только в модалке (U07) --- */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4); z-index: 50; }
+.modal {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 51;
+  max-height: 100dvh;
+  overflow-y: auto;
+  background: var(--bg);
+  padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 2;
+  padding: 2px 0 8px;
+}
+.modal-head h3 { margin: 0; font-size: 1.0625rem; font-weight: 600; }
+.modal-x {
+  font: inherit;
+  font-size: 1.25rem;
+  line-height: 1;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  width: var(--touch);
+  height: var(--touch);
+  color: var(--text);
+  cursor: pointer;
+  flex-shrink: 0;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+/* «Было → стало»: подтверждение правки — список полей с обеими
+   значениями (ТЗ v4 §7.1); стрелка — внутри значения, не в кнопке */
+.diff-list {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) 1fr;
+  gap: 4px 16px;
+  font-size: 0.9375rem;
+  margin: 8px 0 0;
+}
+.diff-list dt { color: var(--muted); }
+.diff-list dd { margin: 0; text-align: right; font-weight: 500; overflow-wrap: anywhere; }
+/* U20: происхождение значения атрибута — видимая строка под полем */
+.attr-evidence { font-size: 0.75rem; color: var(--muted); margin-top: 4px; overflow-wrap: anywhere; }
+/* U23: поиск зон — спиннер в поле, не строка «Загрузка…» */
+.zone-search { position: relative; }
+.zone-search input { width: 100%; padding-right: 2.75rem; }
+.zone-search.busy::after {
+  content: '';
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  margin-top: -9px;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* --- Служебные метки --- */
+.error { color: var(--danger); font-size: 0.9375rem; margin: 8px 0; white-space: pre-wrap; }
+/* TZ UI v5 U09: кнопка «Повторить» — тот же запрос, стиль ghost */
+.retry-btn { margin-top: 8px; }
+/* TZ UI v5 U09: скелетоны — только при запросе > 300 мс; структура
+   повторяет будущий контент (строка списка / блок экрана), без текста */
+@keyframes pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.9; } }
+.skeleton-list { display: flex; flex-direction: column; margin-top: 8px; }
+.skeleton-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--line);
+}
+.skeleton-row::before,
+.skeleton-row::after {
+  display: block;
+  height: 0.9rem;
+  border-radius: 4px;
+  background: var(--line);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.skeleton-row::before { width: 60%; }
+.skeleton-row::after { width: 35%; align-self: flex-end; }
+.skeleton-block {
+  height: 3rem;
+  margin-top: 16px;
+  border-radius: 4px;
+  background: var(--line);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.muted { color: var(--muted); font-size: 0.875rem; }
+/* Блокирующий факт внутри второстепенного ряда (например «пока не назначен»)
+   выделяется весом и основным цветом — без нового цветового смысла (ТЗ §8) */
+.warn-text { font-weight: 600; color: var(--text); }
+/* Статус условия поиска: точка + текст, а не «похожий на поле» чип
+   (критика Этапа 5). Заполненная точка — активно, контурная — выключено:
+   нейтральная шкала, без нового цветового смысла (ТЗ §8) */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--text);
+  flex-shrink: 0;
+}
+.tag::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text);
+}
+.tag.off { color: var(--muted); font-weight: 500; }
+.tag.off::before { background: transparent; border: 1.5px solid var(--muted); }
+
+/* --- Калибровочная кривая: диаграмма с внутренней прокруткой
+      (страница при этом не уезжает вбок) --- */
+.chart-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 8px; }
+/* TZ_UI v5 U21: min-width убран — на 320 px график умещается без
+   внутренней прокрутки; подписи 13 px в системе 380 viewBox-единиц
+   (на 320 px ≈ 9,9 px, а не 8,3 при 11 px) */
+.calib-svg {
+  max-width: 460px;
+  width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+.calib-axis { stroke: var(--muted); stroke-width: 1; }
+.calib-grid line { stroke: var(--line); stroke-width: 1; }
+.calib-diag { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 4; opacity: 0.5; }
+.calib-curve { stroke: var(--text); stroke-width: 2; }
+.calib-dot { fill: var(--text); }
+.calib-label { font-size: 13px; fill: var(--muted); }
+/* TZ_UI v5 U20: тап-зона точки — невидимый круг r=12 viewBox-единиц
+   (≈ 9 px на 320 px вьюпорте); без role/tabindex — полные значения
+   даёт экран децилей */
+.calib-hit { fill: transparent; cursor: pointer; }
+.calib-tip { font-size: 0.875rem; color: var(--muted); margin: 8px 0 0; }
+
+/* Ссылка на экран децилей: зона касания, без стрелки (§6.5, §8) */
+.calib-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  margin-top: 8px;
+  touch-action: manipulation;
+}
+/* Явный выход на родительский раздел на экране децилей: drill-down,
+   а не самостоятельный раздел (критика Этапа 5) */
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  margin-bottom: 4px;
+  touch-action: manipulation;
+}
+/* Пустое состояние децилей закрыто рамкой: модель + причина — цельный
+   ответ, а не одинокая строка на пустом поле (критика Этапа 5) */
+.calib-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+/* Числовые значения децилей на отдельном экране: плоские строки
+   «дециль — значения», числа справа (§6.5) */
+.calib-kv { display: block; margin-top: 8px; }
+.calib-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.875rem;
+}
+.calib-row:last-child { border-bottom: 0; }
+.calib-row dt { color: var(--muted); }
+.calib-row dd { margin: 0; text-align: right; font-weight: 500; overflow-wrap: anywhere; }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+main.map-main {
+  max-width: none;
+  padding: 0;
+  padding-bottom: calc(46px + env(safe-area-inset-bottom));
+  min-height: 100dvh;
+}
+.map-page {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - 46px - env(safe-area-inset-bottom));
+}
+.map-head { padding: 8px 12px; z-index: 4; background: var(--bg); }
+.map-search { display: flex; gap: 8px; align-items: center; }
+.map-search input {
+  flex: 1;
+  min-height: var(--touch);
+  font-size: 1rem;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+}
+.map-clear {
+  min-width: var(--touch);
+  min-height: var(--touch);
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 1.5rem;
+}
+.map-canvas { flex: 1; min-height: 45%; }
+.map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 6px 12px;
+  font-size: 0.75rem;
+  background: var(--bg);
+}
+.map-leg-item { display: inline-flex; align-items: center; gap: 4px; }
+.map-thumb {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px 4px;
+}
+.map-ctrl {
+  min-height: var(--touch);
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.875rem;
+}
+.map-pin {
+  min-width: var(--touch);
+  min-height: var(--touch);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0 6px;
+}
+.map-pin-far_below, .map-pin-below { color: var(--accent); }
+.map-pin-far_above, .map-pin-above { color: var(--accent-hi); }
+.map-sheet {
+  background: var(--bg);
+  border-top: 1px solid var(--line);
+  overflow: auto;
+}
+.map-sheet-collapsed { max-height: 52px; }
+.map-sheet-mid { max-height: 42dvh; }
+.map-sheet-expanded { max-height: 55dvh; }
+.sheet-handle {
+  width: 100%;
+  min-height: var(--touch);
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.875rem;
+}
+.sheet-grip {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+}
+.sheet-card { display: flex; padding: 8px 12px 16px; }
+.sheet-list { padding: 0 12px 16px; }
+.map-err { margin: 8px 12px; }
+.mini-map-wrap { margin-top: 12px; }
+.mini-map { height: 160px; border-radius: 8px; overflow: hidden; }
+.zone-card { padding-top: 12px; }

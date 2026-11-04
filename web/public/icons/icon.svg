@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Фавикон: дом на акцентной плитке (цвет :root, styles.css).
+       Масштабируется на любом размере; PNG-иконки — для PWA (U12). -->
+  <rect width="32" height="32" rx="6" fill="#177245"/>
+  <path d="M16 6 L26 15 h-3 v11 h-5 v-7 h-4 v7 h-5 V15 h-3 Z" fill="#ffffff"/>
+</svg>

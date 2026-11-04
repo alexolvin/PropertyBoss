@@ -1,0 +1,10 @@
+#CS robots.txt
+User-agent: *
+Disallow: /vyhledat*
+Disallow: /moje-bezrealitky/*
+Disallow: /*callbackUrl=*
+Disallow: /centrum-sluzeb/bezrealitky-hypoteka/form*
+Disallow: /centrum-sluzeb/bezrealitky-hypoteka*price=*
+Disallow: /centrum-sluzeb/bezrealitky-hypoteka?*
+Disallow: /search*
+Sitemap: https://www.bezrealitky.cz/sitemap/sitemap.xml

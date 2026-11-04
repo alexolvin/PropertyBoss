@@ -1,0 +1,105 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+credentials.json
+secrets.yaml
+secrets.yml
+kubeconfig
+*.kubeconfig
+
+# Machine-local config. Examples (config.example.yaml, secrets.example.yaml) stay.
+config/config.yaml
+config/secrets.yaml
+
+# Agent / local AI tooling (never publish)
+.agent/
+.agents/
+.claude/
+.codex/
+.cursor/
+.aider/
+.continue/
+.windsurf/
+.sweep/
+.goose/
+.idea-agent/
+*.agent.md
+.scratch/
+# CLAUDE.md is a local agent pointer. AGENTS.md stays unignored: some
+# agents load root rules only from files that are not gitignored.
+CLAUDE.md
+/.a/
+
+# Terminal sessions, multiplexers, and distributed-agent runtime
+*.tmux
+*.tmux.log
+tmux-client-*
+tmux-server-*
+screenlog.*
+*.screenlog
+zellij-dump*
+nohup.out
+*.cast
+typescript
+.typescript
+pane-capture*
+session-dump*
+.queue/
+.jobs/
+.runs/
+gpu-pool/
+workers/*.log
+dispatcher-state.json
+*.queue.json
+tmux-sessions/
+terminal-dumps/
+
+# Session scratch (files and directories)
+tmp_*
+tmp/
+temp/
+
+# Binaries and local data (zone files, photos, logs)
+/bin/
+/data/
+
+# Frontend
+node_modules/
+web/dist/
+dist/
+build/
+
+# UI test output
+web/playwright-report/
+web/test-results/
+coverage/
+.pytest_cache/
+.mypy_cache/
+__pycache__/
+.venv/
+venv/
+.cache/
+
+# Probe captures: machine name plus third-party page samples. Local only.
+/artifacts/
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editors (no local paths, no tokens)
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json.example
+
+# Logs
+*.log

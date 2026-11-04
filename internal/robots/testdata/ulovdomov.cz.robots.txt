@@ -1,0 +1,9 @@
+# *
+User-agent: *
+Allow: /
+
+# Host
+Host: https://www.ulovdomov.cz
+
+# Sitemaps
+Sitemap: https://www.ulovdomov.cz/sitemap.xml
