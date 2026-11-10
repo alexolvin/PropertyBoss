@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -363,6 +364,19 @@ type Config struct {
 	// пороги авто-промоушна mined-шаблонов. Арсенал — данные в БД
 	// (attribute_templates); пороги — в конфиге, не в коде (ТЗ §0.10).
 	Rules RulesConf `yaml:"rules"`
+
+	// Backup — резервное копирование и тест восстановления (ТЗ-R1 R0.3, R0.4).
+	Backup BackupConf `yaml:"backup"`
+}
+
+// BackupConf — параметры резервного копирования и верификации (ТЗ-R1 R0.3, R0.4).
+type BackupConf struct {
+	Dir        string `yaml:"dir"`         // локальный каталог дампов (~/backups/propertyboss)
+	Remote     string `yaml:"remote"`      // admin@100.126.222.23:/srv/backup/propertyboss
+	SSHKey     string `yaml:"ssh_key"`     // ~/.ssh/pb_backup
+	KeepLocal  int    `yaml:"keep_local"`  // 14
+	KeepRemote int    `yaml:"keep_remote"` // 30
+	TestDB     string `yaml:"test_db"`     // pb_restore_test
 }
 
 // RulesConf — тип секции rules (именованный: её используют internal/extract
@@ -981,6 +995,32 @@ func Load(path string) (*Config, error) {
 	if c.Rules.AutoPromote && c.Rules.MinMinedOccurrences < 5 {
 		return nil, fmt.Errorf("config: rules.auto_promote=true требует min_mined_occurrences >= 5 (холдаут C8), задано %d", c.Rules.MinMinedOccurrences)
 	}
+
+	// Backup (ТЗ-R1 R0.3, R0.4).
+	if c.Backup.Dir == "" {
+		home, _ := os.UserHomeDir()
+		c.Backup.Dir = filepath.Join(home, "backups", "propertyboss")
+	} else if strings.HasPrefix(c.Backup.Dir, "~/") {
+		home, _ := os.UserHomeDir()
+		c.Backup.Dir = filepath.Join(home, c.Backup.Dir[2:])
+	}
+	if c.Backup.SSHKey == "" {
+		home, _ := os.UserHomeDir()
+		c.Backup.SSHKey = filepath.Join(home, ".ssh", "pb_backup")
+	} else if strings.HasPrefix(c.Backup.SSHKey, "~/") {
+		home, _ := os.UserHomeDir()
+		c.Backup.SSHKey = filepath.Join(home, c.Backup.SSHKey[2:])
+	}
+	if c.Backup.KeepLocal <= 0 {
+		c.Backup.KeepLocal = 14
+	}
+	if c.Backup.KeepRemote <= 0 {
+		c.Backup.KeepRemote = 30
+	}
+	if c.Backup.TestDB == "" {
+		c.Backup.TestDB = "pb_restore_test"
+	}
+
 	return &c, nil
 }
 

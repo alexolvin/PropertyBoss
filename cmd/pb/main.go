@@ -156,6 +156,10 @@ func main() {
 		if err := runVerifySample(ctx, cfg, subArgs); err != nil {
 			log.Fatal(err)
 		}
+	case "backup":
+		if err := runBackup(ctx, cfg, subArgs); err != nil {
+			log.Fatal(err)
+		}
 	default:
 		usage()
 	}
@@ -206,6 +210,8 @@ func usage() {
   sources harvest --url URL --via link:<домен>   D2: домены со страницы-перечня
   probe <domain> | probe --pending        проба площадки P1–P12 (ТЗ-SRC-CZ-1)
   verify-sample <source-id> [--n 20] [--seed N]   сверка выборки с живой площадкой (G2.5)
+  backup run                            создать резервную копию всей БД (ТЗ-R1 R0.3)
+  backup verify [--dump PATH]           тест восстановления в pb_restore_test (ТЗ-R1 R0.4)
 
 Конфиг: --config PATH (глобальный флаг, ДО субкоманды) | $PB_CONFIG | config/config.yaml`)
 	os.Exit(2)

@@ -410,3 +410,13 @@ fx:
   # референсные курсы ЕЦБ; в fx_rates.source путь атрибутируется явно.
   # Необязательно: без него синхронизация идёт только прямым каналом.
   fallback_base_url: "https://api.frankfurter.dev/v1"
+
+# Резервное копирование (ТЗ-R1 R0.3, R0.4).
+backup:
+  dir: "~/backups/propertyboss"
+  remote: "CHANGE_ME@remote-host:/path/to/backup"
+  ssh_key: "~/.ssh/pb_backup"
+  keep_local: 14
+  keep_remote: 30
+  test_db: "pb_restore_test"
+

@@ -20,7 +20,10 @@ package doctor
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -118,6 +121,9 @@ func Run(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, country st
 	checkLimiter(rep, cfg.Source.RequestIntervalMS)
 	// Девятый чек — инвариант раздачи (TZ UI v5 U04): без БД, read-only.
 	checkWeb(rep, cfg)
+	// Десятый и одиннадцатый чеки — бэкап и тест восстановления (ТЗ-R1 R0.3, R0.4).
+	checkBackup(rep, cfg)
+	checkRestore(rep, cfg)
 	return rep, nil
 }
 
@@ -480,4 +486,71 @@ func checkLimiter(rep *Report, intervalMS int) {
 	rep.add("limiter", INFO, fmt.Sprintf(
 		"интервал %d мс (source.request_interval_ms), вызовов WaitSource в процессе: %d (0 в read-only — штатно)",
 		intervalMS, ratelimit.WaitCount()))
+}
+
+// checkBackup — статус последней резервной копии (ТЗ-R1 R0.3).
+// FAIL при возрасте последней успешной копии > 26 ч или при ошибке.
+func checkBackup(rep *Report, cfg *config.Config) {
+	stateFile := filepath.Join(cfg.Backup.Dir, "backup_state.json")
+	data, err := os.ReadFile(stateFile)
+	if err != nil {
+		rep.add("backup", FAIL, "нет файла состояния резервных копий (pb backup run ещё не выполнялся)")
+		return
+	}
+	var st struct {
+		LastRun     time.Time `json:"last_run"`
+		LastSuccess time.Time `json:"last_success"`
+		LastError   string    `json:"last_error"`
+		DumpFile    string    `json:"dump_file"`
+		SHA256      string    `json:"sha256"`
+		SizeBytes   int64     `json:"size_bytes"`
+	}
+	if err := json.Unmarshal(data, &st); err != nil {
+		rep.add("backup", FAIL, fmt.Sprintf("повреждён %s: %v", stateFile, err))
+		return
+	}
+	if st.LastError != "" && st.LastSuccess.IsZero() {
+		rep.add("backup", FAIL, fmt.Sprintf("последний бэкап завершился ошибкой: %s", st.LastError))
+		return
+	}
+	age := time.Since(st.LastSuccess)
+	if age > 26*time.Hour {
+		rep.add("backup", FAIL, fmt.Sprintf("возраст последней успешной копии %.1f ч (> 26 ч), файл: %s", age.Hours(), st.DumpFile))
+		return
+	}
+	rep.add("backup", OK, fmt.Sprintf("возраст %.1f ч (< 26 ч), размер %.1f МБ, SHA-256 %.12s...",
+		age.Hours(), float64(st.SizeBytes)/(1024*1024), st.SHA256))
+}
+
+// checkRestore — статус последнего теста восстановления (ТЗ-R1 R0.4).
+// FAIL при возрасте последнего успешного теста > 8 суток (192 ч) или при ошибке.
+func checkRestore(rep *Report, cfg *config.Config) {
+	stateFile := filepath.Join(cfg.Backup.Dir, "restore_state.json")
+	data, err := os.ReadFile(stateFile)
+	if err != nil {
+		rep.add("restore", FAIL, "тест восстановления ещё не проводился (pb backup verify)")
+		return
+	}
+	var st struct {
+		LastRun     time.Time        `json:"last_run"`
+		LastSuccess time.Time        `json:"last_success"`
+		LastError   string           `json:"last_error"`
+		DumpFile    string           `json:"dump_file"`
+		Status      string           `json:"status"`
+		Counts      map[string]int64 `json:"counts"`
+	}
+	if err := json.Unmarshal(data, &st); err != nil {
+		rep.add("restore", FAIL, fmt.Sprintf("повреждён %s: %v", stateFile, err))
+		return
+	}
+	if st.Status != "PASS" {
+		rep.add("restore", FAIL, fmt.Sprintf("последний тест восстановления завершился со статусом %s: %s", st.Status, st.LastError))
+		return
+	}
+	age := time.Since(st.LastSuccess)
+	if age > 8*24*time.Hour {
+		rep.add("restore", FAIL, fmt.Sprintf("последний успешный тест восстановления был %.1f сут назад (> 8 суток)", age.Hours()/24))
+		return
+	}
+	rep.add("restore", OK, fmt.Sprintf("пройден %.1f ч назад, проверено таблиц: %d", age.Hours(), len(st.Counts)))
 }
