@@ -27,7 +27,7 @@ export default defineConfig({
   reporter: [['list'], ['html', { open: 'never' }]],
   outputDir: './test-results',
   use: {
-    baseURL: process.env.PB_UI_BASE_URL ?? 'http://127.0.0.1:8090',
+    baseURL: process.env.PB_UI_BASE_URL ?? 'http://127.0.0.1:8091',
     isMobile: true,
     hasTouch: true,
     deviceScaleFactor: 2,

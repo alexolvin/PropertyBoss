@@ -21,7 +21,7 @@ type DiskInfo struct {
 // MeasureDisk — statfs пути. «Свободно» — Bavail (доступно
 // непривилегированному пользователю), а не Bfree (ядро держит
 // резерв для root): оператор освобождает место как непривилегированный.
-// Только Linux (цель — Termux/Android, ТЗ §3); на других
+// Только Linux; на других
 // платформах syscall.Statfs — compile-time ошибка, и это честно.
 func MeasureDisk(path string) (*DiskInfo, error) {
 	var st syscall.Statfs_t

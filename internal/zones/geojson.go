@@ -3,8 +3,7 @@
 // Геометрии импортируются чистым Go, без GDAL/CGO: GeoJSON передаётся в
 // PostGIS как есть (ST_Multi(ST_GeomFromGeoJSON(...))::geography — в локальной
 // сборке PostGIS отсутствуют ST_GeogFromGeoJSON и ST_Multi(geography)),
-// локальный разбор координат не нужен. Это важно для конечной цели —
-// Termux (без CGO).
+// локальный разбор координат не нужен (без CGO).
 package zones
 
 import (
