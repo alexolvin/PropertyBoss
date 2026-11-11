@@ -34,33 +34,42 @@ func TestReplaceDBInDSN(t *testing.T) {
 	}
 }
 
-func TestRotateLocal(t *testing.T) {
+func TestRotateFiles(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Создаём 5 дампов
+	// Создаём 5 файлов дампов и state
 	for i := 1; i <= 5; i++ {
 		dumpName := filepath.Join(tmpDir, time.Date(2026, 11, i, 0, 0, 0, 0, time.UTC).Format("pb_20060102T150405Z.dump"))
 		metaName := filepath.Join(tmpDir, time.Date(2026, 11, i, 0, 0, 0, 0, time.UTC).Format("pb_20060102T150405Z.meta.json"))
+		stateName := filepath.Join(tmpDir, time.Date(2026, 11, i, 0, 0, 0, 0, time.UTC).Format("state_20060102T150405Z.tar.zst"))
 		_ = os.WriteFile(dumpName, []byte("dump"), 0644)
 		_ = os.WriteFile(metaName, []byte("{}"), 0644)
+		_ = os.WriteFile(stateName, []byte("state"), 0644)
 	}
 
 	// Оставляем 3
-	rotateLocal(tmpDir, 3)
+	rotateFiles(tmpDir, "pb_", ".dump", 3, true)
+	rotateFiles(tmpDir, "state_", ".tar.zst", 3, false)
 
 	entries, err := os.ReadDir(tmpDir)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	var dumps []string
+	var dumps, states int
 	for _, e := range entries {
 		if filepath.Ext(e.Name()) == ".dump" {
-			dumps = append(dumps, e.Name())
+			dumps++
+		}
+		if filepath.Ext(e.Name()) == ".zst" {
+			states++
 		}
 	}
 
-	if len(dumps) != 3 {
-		t.Errorf("expected 3 dumps after rotation, got %d", len(dumps))
+	if dumps != 3 {
+		t.Errorf("expected 3 dumps, got %d", dumps)
+	}
+	if states != 3 {
+		t.Errorf("expected 3 states, got %d", states)
 	}
 }

@@ -509,8 +509,12 @@ func checkBackup(rep *Report, cfg *config.Config) {
 		rep.add("backup", FAIL, fmt.Sprintf("повреждён %s: %v", stateFile, err))
 		return
 	}
-	if st.LastError != "" && st.LastSuccess.IsZero() {
+	if st.LastError != "" {
 		rep.add("backup", FAIL, fmt.Sprintf("последний бэкап завершился ошибкой: %s", st.LastError))
+		return
+	}
+	if st.LastSuccess.IsZero() {
+		rep.add("backup", FAIL, "нет успешных резервных копий")
 		return
 	}
 	age := time.Since(st.LastSuccess)
