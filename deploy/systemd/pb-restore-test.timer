@@ -1,0 +1,9 @@
+[Unit]
+Description=PropertyBoss Restore Verification Timer
+
+[Timer]
+OnCalendar=Sun 04:00 Europe/Prague
+Persistent=true
+
+[Install]
+WantedBy=timers.target

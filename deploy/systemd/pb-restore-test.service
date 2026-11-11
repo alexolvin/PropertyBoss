@@ -1,0 +1,8 @@
+[Unit]
+Description=PropertyBoss Restore Verification Test
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/user/myhub/PropertyBoss
+ExecStart=/home/user/myhub/PropertyBoss/bin/pb backup verify
+Environment="PATH=/home/user/.local/go/bin:/usr/local/bin:/usr/bin:/bin"

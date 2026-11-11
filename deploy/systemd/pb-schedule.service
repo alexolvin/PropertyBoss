@@ -1,0 +1,8 @@
+[Unit]
+Description=PropertyBoss Scanner Schedule Run
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/user/myhub/PropertyBoss
+ExecStart=/home/user/myhub/PropertyBoss/bin/pb schedule run
+Environment="PATH=/home/user/.local/go/bin:/usr/local/bin:/usr/bin:/bin"

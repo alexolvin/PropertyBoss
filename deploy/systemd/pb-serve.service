@@ -1,0 +1,14 @@
+[Unit]
+Description=PropertyBoss API and Dashboard Server
+After=network.target tailscaled.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/user/myhub/PropertyBoss
+ExecStart=/home/user/myhub/PropertyBoss/bin/pb serve
+Restart=always
+RestartSec=10
+Environment="PATH=/home/user/.local/go/bin:/usr/local/bin:/usr/bin:/bin"
+
+[Install]
+WantedBy=default.target

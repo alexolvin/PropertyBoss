@@ -160,6 +160,10 @@ func main() {
 		if err := runBackup(ctx, cfg, subArgs); err != nil {
 			log.Fatal(err)
 		}
+	case "report":
+		if err := runReport(ctx, cfg, subArgs); err != nil {
+			log.Fatal(err)
+		}
 	default:
 		usage()
 	}
