@@ -30,6 +30,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"propertyboss/internal/config"
+	"propertyboss/internal/extract"
 	"propertyboss/internal/ratelimit"
 )
 
@@ -124,6 +125,8 @@ func Run(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, country st
 	// Десятый и одиннадцатый чеки — бэкап и тест восстановления (ТЗ-R1 R0.3, R0.4).
 	checkBackup(rep, cfg)
 	checkRestore(rep, cfg)
+	// Двенадцатый чек — доступность LLM-сервера (ТЗ-R1 R1.5).
+	checkLLM(ctx, rep, cfg)
 	return rep, nil
 }
 
@@ -557,4 +560,25 @@ func checkRestore(rep *Report, cfg *config.Config) {
 		return
 	}
 	rep.add("restore", OK, fmt.Sprintf("пройден %.1f ч назад, проверено таблиц: %d", age.Hours(), len(st.Counts)))
+}
+
+// checkLLM — доступность LLM-сервера (ТЗ-R1 R1.5).
+// GET {extract.base_url}/models, таймаут 5 с.
+// Недоступность — INFO со временем начала недоступности, не FAIL: Выпуск 1 не зависит от LLM.
+func checkLLM(ctx context.Context, rep *Report, cfg *config.Config) {
+	baseURL := cfg.Extract.BaseURL
+	if baseURL == "" {
+		rep.add("llm", INFO, "extract.base_url не настроен")
+		return
+	}
+	ok, st, err := extract.CheckHealth(ctx, baseURL)
+	if ok {
+		rep.add("llm", OK, fmt.Sprintf("доступен (%s)", baseURL))
+		return
+	}
+	sinceStr := ""
+	if st != nil && st.UnavailableSince != nil {
+		sinceStr = fmt.Sprintf(" с %s", st.UnavailableSince.Format("02.01.2006 15:04"))
+	}
+	rep.add("llm", INFO, fmt.Sprintf("недоступен%s (%s: %v)", sinceStr, baseURL, err))
 }

@@ -209,7 +209,13 @@ func (s *Server) handleMapObjects(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	maxDeg := s.Cfg.Dashboard.Map.MaxBBoxDeg
+	if maxDeg <= 0 {
+		maxDeg = 20
+	}
 	minZ := s.Cfg.Dashboard.Map.MinZoomWide
+	if minZ <= 0 {
+		minZ = 10
+	}
 	if (bbox.width() > maxDeg || bbox.height() > maxDeg) && zoom < minZ {
 		writeErr(w, httpError(http.StatusBadRequest,
 			"область слишком велика: bbox %g°×%g° при zoom %d — нужен zoom ≥ %d для bbox шире %g°",

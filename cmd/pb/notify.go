@@ -198,10 +198,12 @@ func runNotifyTest(ctx context.Context, cfg *config.Config) error {
 	if err != nil {
 		return err
 	}
-	if err := cl.Send(ctx, text); err != nil {
+	raw, err := cl.SendResponse(ctx, text)
+	if err != nil {
 		return fmt.Errorf("notify test: %v", err)
 	}
 	log.Printf("notify test: тестовое сообщение доставлено")
+	fmt.Printf("%s\n", string(raw))
 	return nil
 }
 

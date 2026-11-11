@@ -19,6 +19,7 @@ import (
 
 	"propertyboss/internal/config"
 	"propertyboss/internal/db"
+	"propertyboss/internal/extract"
 	"propertyboss/internal/translate"
 )
 
@@ -64,6 +65,10 @@ func runTranslateRun(ctx context.Context, cfg *config.Config, args []string) err
 	cl, err := translateClient(cfg)
 	if err != nil {
 		return err
+	}
+	if available, _, err := extract.CheckHealth(ctx, cfg.Translate.BaseURL); !available {
+		log.Printf("translate run: LLM-сервер %s недоступен (%v) — пропуск запуска", cfg.Translate.BaseURL, err)
+		return nil
 	}
 	pool, err := db.Open(ctx, cfg.Database.DSN)
 	if err != nil {

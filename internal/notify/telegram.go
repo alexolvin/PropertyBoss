@@ -86,13 +86,19 @@ func chatIDAndThread(chatID string) (any, int, error) {
 // нарастающей паузой; прочие 4xx → ErrPermanent (неверный токен, чат не
 // найден — ретраем не лечится).
 func (c *Client) Send(ctx context.Context, text string) error {
+	_, err := c.SendResponse(ctx, text)
+	return err
+}
+
+// SendResponse — отправить текст и вернуть дословный ответ Bot API.
+func (c *Client) SendResponse(ctx context.Context, text string) ([]byte, error) {
 	c.defaultClient()
 	if c.Token == "" || c.ChatID == "" {
-		return fmt.Errorf("notify: telegram не настроен (токен/чат_id не заданы в конфиге)")
+		return nil, fmt.Errorf("notify: telegram не настроен (токен/чат_id не заданы в конфиге)")
 	}
 	chatID, thread, err := chatIDAndThread(c.ChatID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	body := map[string]any{"chat_id": chatID, "text": text}
 	if thread > 0 {
@@ -106,29 +112,30 @@ func (c *Client) Send(ctx context.Context, text string) error {
 			d := retryWait[min(attempt-1, len(retryWait)-1)]
 			select {
 			case <-ctx.Done():
-				return ctx.Err()
+				return nil, ctx.Err()
 			case <-time.After(d):
 			}
 		}
-		lastErr = c.sendOnce(ctx, bodyJSON)
-		if lastErr == nil {
-			return nil
+		raw, err := c.sendOnce(ctx, bodyJSON)
+		if err == nil {
+			return raw, nil
 		}
+		lastErr = err
 		var perm *ErrPermanent
 		if errors.As(lastErr, &perm) {
-			return lastErr
+			return raw, lastErr
 		}
 		var wait *RateLimitWait
 		if errors.As(lastErr, &wait) {
 			c.Sleep(wait.D)
 		}
 	}
-	return lastErr
+	return nil, lastErr
 }
 
-// sendOnce — один запрос. Возвращает nil, *ErrPermanent (4xx кроме
+// sendOnce — один запрос. Возвращает ответ Bot API, nil, *ErrPermanent (4xx кроме
 // 429) или *RateLimitWait (429, с паузой retry_after).
-func (c *Client) sendOnce(ctx context.Context, body []byte) error {
+func (c *Client) sendOnce(ctx context.Context, body []byte) ([]byte, error) {
 	// Каноническая форма Bot API: bot<token>/<method> — «bot» и токен
 	// слитно. Со слэшем (/bot/<token>/) запрос попадает на WAF-локацию
 	// edge, которая с некоторых IP отвечает 404 «Not Found» в
@@ -137,27 +144,27 @@ func (c *Client) sendOnce(ctx context.Context, body []byte) error {
 	url := fmt.Sprintf("%s/bot%s/sendMessage", c.BaseURL, c.Token)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("notify: запрос: %w", err)
+		return nil, fmt.Errorf("notify: запрос: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		return fmt.Errorf("notify: сеть: %w", err)
+		return nil, fmt.Errorf("notify: сеть: %w", err)
 	}
 	defer resp.Body.Close()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return fmt.Errorf("notify: чтение ответа: %w", err)
+		return nil, fmt.Errorf("notify: чтение ответа: %w", err)
 	}
 
 	var tg tgResponse
 	if err := json.Unmarshal(data, &tg); err != nil {
 		// Не-JSON от API — лечится повтором (сбой на прокси).
-		return fmt.Errorf("notify: ответ Bot API не JSON (HTTP %d): %s", resp.StatusCode, truncate(string(data), 200))
+		return data, fmt.Errorf("notify: ответ Bot API не JSON (HTTP %d): %s", resp.StatusCode, truncate(string(data), 200))
 	}
 	switch {
 	case resp.StatusCode == http.StatusOK && tg.OK:
-		return nil
+		return data, nil
 	case resp.StatusCode == http.StatusTooManyRequests:
 		d := 3 * time.Second
 		if pa, ok := retryAfter(resp.Header.Get("Retry-After")); ok {
@@ -166,13 +173,13 @@ func (c *Client) sendOnce(ctx context.Context, body []byte) error {
 		if d > 60*time.Second {
 			d = 60 * time.Second
 		}
-		return &RateLimitWait{D: d}
+		return data, &RateLimitWait{D: d}
 	case resp.StatusCode >= 500:
-		return fmt.Errorf("notify: Bot API HTTP %d: %s", resp.StatusCode, tg.Description)
+		return data, fmt.Errorf("notify: Bot API HTTP %d: %s", resp.StatusCode, tg.Description)
 	case resp.StatusCode >= 400:
-		return &ErrPermanent{Msg: fmt.Sprintf("Bot API HTTP %d: %s", resp.StatusCode, tg.Description)}
+		return data, &ErrPermanent{Msg: fmt.Sprintf("Bot API HTTP %d: %s", resp.StatusCode, tg.Description)}
 	default:
-		return &ErrPermanent{Msg: fmt.Sprintf("Bot API ok=false (code %d): %s", tg.ErrorCode, tg.Description)}
+		return data, &ErrPermanent{Msg: fmt.Sprintf("Bot API ok=false (code %d): %s", tg.ErrorCode, tg.Description)}
 	}
 }
 

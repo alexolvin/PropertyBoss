@@ -78,6 +78,10 @@ func runExtractRun(ctx context.Context, cfg *config.Config, args []string) error
 	if err != nil {
 		return err
 	}
+	if available, _, err := extract.CheckHealth(ctx, cfg.Extract.BaseURL); !available {
+		log.Printf("extract run: LLM-сервер %s недоступен (%v) — пропуск запуска", cfg.Extract.BaseURL, err)
+		return nil
+	}
 	pool, err := db.Open(ctx, cfg.Database.DSN)
 	if err != nil {
 		return err
